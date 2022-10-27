@@ -12,24 +12,21 @@
 #include <esp_log.h>
 #include <string.h>
 #include "main.h"
+#include "ui.h"
+#include "wifi_prov.h"
 #include "lv_qrcode.h"
+#include "events.h"
 
 static const char *TAG = "WiFi";
 
-static lv_obj_t *qrCodeImage = NULL;
+wifiState_t wifiState;
+
+static lv_obj_t *qrCodeImage;
+static lv_obj_t *provLabel;
+static lv_obj_t *connectLabel;
+static lv_style_t titleStyle;
+
 /* Signal Wi-Fi events on this event-group */
-
-EventGroupHandle_t wifi_event_group;
-
-/* Initialize TCP/IP */
-
-static void initNetwork() {
-    ESP_ERROR_CHECK(esp_netif_init());
-
-/* Initialize the event loop */
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    wifi_event_group = xEventGroupCreate();
-}
 
 static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data) {
@@ -44,6 +41,8 @@ static void event_handler(void *arg, esp_event_base_t event_base,
                               "\n\tSSID     : %s\n\tPassword : %s",
                          (const char *) wifi_sta_cfg->ssid,
                          (const char *) wifi_sta_cfg->password);
+                wifiState = WIFI_CONNECTING;
+                postMessage(EVENT_WIFI_CHANGE, NULL, 0);
                 break;
             }
             case WIFI_PROV_CRED_FAIL: {
@@ -70,11 +69,13 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
-        xEventGroupSetBits(wifi_event_group, WIFI_STATUS_CONNECTED);
+        wifiState = WIFI_CONNECTED;
+        postMessage(EVENT_WIFI_CHANGE, NULL, 0);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
-        xEventGroupClearBits(wifi_event_group, WIFI_STATUS_CONNECTED);
+        wifiState = WIFI_CONNECTING;
         esp_wifi_connect();
+        postMessage(EVENT_WIFI_CHANGE, NULL, 0);
     }
 }
 
@@ -90,7 +91,8 @@ static void get_device_service_name(char *service_name, size_t max) {
  * One-time WiFi initialisation
  */
 void initWiFi() {
-    initNetwork();
+    ESP_ERROR_CHECK(esp_netif_init());
+    wifiState = WIFI_UNKNOWN;
     /* Register our event handler for Wi-Fi, IP and Provisioning related events */
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_PROV_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
@@ -103,26 +105,14 @@ void initWiFi() {
 }
 
 
-static void showQr(const char *name, const char *pop) {
-    ESP_LOGI(TAG, "Show QR name = %s pop=%s", name, pop);
-    char payload[150] = {0};
-    snprintf(payload, sizeof(payload), "{\"ver\":\"%s\",\"name\":\"%s\"" \
-                    ",\"pop\":\"%s\",\"transport\":\"%s\"}",
-             "v1", name, pop, "ble");
-    qrCodeImage = lv_qrcode_create(lv_scr_act(), 150, lv_color_white(), lv_color_black());
-    ESP_LOGI(TAG, "Show QR name = %s pop=%s", name, pop);
-    lv_obj_align(qrCodeImage, LV_ALIGN_LEFT_MID, 0, 0);
-    lv_obj_set_style_border_color(qrCodeImage, lv_color_black(), 0);
-    lv_obj_set_style_border_width(qrCodeImage, 5, 0);
-    ESP_LOGI(TAG, "Add data to QR code");
-    lv_qrcode_update(qrCodeImage, payload, strlen(payload));
-}
+static char payload[150];
 
 /**
  * Provision and connect WiFi.
  *
  * If not already provisioned, display QR code.
  */
+
 void provisionWiFi(bool force) {
 
     /* Configuration for the provisioning manager */
@@ -163,23 +153,79 @@ void provisionWiFi(bool force) {
                 0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02,
         };
 
+        snprintf(payload, sizeof(payload), "{\"ver\":\"%s\",\"name\":\"%s\"" \
+                    ",\"pop\":\"%s\",\"transport\":\"%s\"}",
+                 "v1", service_name, pop, "ble");
         /* If your build fails with linker errors at this point, then you may have
          * forgotten to enable the BT stack or BTDM BLE settings in the SDK (e.g. see
          * the sdkconfig.defaults in the example project) */
         wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
         ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, pop, service_name, NULL));
-        ESP_LOGI(TAG, "Show QR");
-        showQr(service_name, pop);
+        wifiState = WIFI_PROVISIONING;
     } else {
         wifi_prov_mgr_deinit();
         ESP_LOGI(TAG, "WiFi already provisioned");
+        wifi_config_t wifi_cfg;
+        esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg);
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         ESP_ERROR_CHECK(esp_wifi_start());
+        wifiState = WIFI_CONNECTING;
     }
-    xEventGroupWaitBits(wifi_event_group, WIFI_STATUS_CONNECTED, false, true, portMAX_DELAY);
-    ESP_LOGI(TAG, "WiFi connected");
-    if(qrCodeImage != NULL) {
-        lv_obj_del(qrCodeImage);
-        qrCodeImage = NULL;
-    }
+    postMessage(EVENT_WIFI_CHANGE, NULL, 0);
 }
+
+static void initStyle() {
+    lv_style_init(&titleStyle);
+    lv_style_set_text_font(&titleStyle, &lv_font_montserrat_20);
+    lv_style_set_bg_color(&titleStyle, lv_color_black());
+    lv_style_set_text_color(&titleStyle, lv_color_white());
+    lv_style_set_text_align(&titleStyle, LV_TEXT_ALIGN_CENTER);
+}
+/**
+ * Show a QR code for provisioning
+ * @param tv    The graphics context to show on
+ */
+static void qrShow(lv_obj_t *tv) {
+    ESP_LOGI(TAG, "Show QR payload = %s", payload);
+    qrCodeImage = lv_qrcode_create(tv, 150, lv_color_white(), lv_color_black());
+    lv_obj_align(qrCodeImage, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_border_color(qrCodeImage, lv_color_black(), 0);
+    lv_obj_set_style_border_width(qrCodeImage, 5, 0);
+    ESP_LOGI(TAG, "Add data to QR code");
+    lv_qrcode_update(qrCodeImage, payload, strlen(payload));
+    initStyle();
+    provLabel = lv_label_create(tv);
+    lv_obj_add_style(provLabel,&titleStyle, 0);
+    lv_obj_set_style_border_color(provLabel, lv_color_black(), 0);
+    lv_obj_set_style_border_width(provLabel, 2, 0);
+    lv_obj_align(provLabel, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_label_set_text(provLabel, "Provision\nWiFi with\nESP Ble App");
+}
+
+/**
+ * Show a message "Connecting to wifi"
+ * @param tv 
+ */
+static void connectShow(lv_obj_t *tv) {
+    connectLabel = lv_label_create(tv);
+    initStyle();
+    lv_obj_center(connectLabel);
+    lv_obj_add_style(connectLabel, &titleStyle, 0);
+
+    wifi_config_t wifi_cfg;
+    esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg);
+    lv_label_set_text_fmt(connectLabel, "Connecting to WiFi\nSSID: %.32s", wifi_cfg.sta.ssid);
+}
+
+const uiScreen_t uiWiFiProvision = {
+        .name = "WiFi Provision",
+        .setup = qrShow,
+        .update = NULL,
+        .teardown = NULL
+};
+const uiScreen_t uiWiFiConnect = {
+        .name = "WiFi Connect",
+        .setup = connectShow,
+        .update = NULL,
+        .teardown = NULL
+};

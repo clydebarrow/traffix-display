@@ -1,34 +1,15 @@
-
-/**
- ******************************************************************************
- * @Channel Link    :  https://www.youtube.com/user/wardzx1
- * @file    		:  uiLoop.h
- * @author  		:  Ward Almasarani - Useful Electronics
- * @version 		:  v.1.0
- * @date    		:  Aug 21, 2022
- * @brief   		:
- *
- ******************************************************************************/
-
-#ifndef MAIN_LVGL_DEMO_UI_H_
-#define MAIN_LVGL_DEMO_UI_H_
+#ifndef TRAFFIX_UI_H_
+#define TRAFFIX_UI_H_
 
 
 /* INCLUDES ------------------------------------------------------------------*/
-#include <math.h>
 #include "lvgl.h"
 #include "esp_log.h"
-
-/* MACROS --------------------------------------------------------------------*/
-#ifndef PI
-#define PI  (3.14159f)
-#endif
+#include "esp_event_base.h"
 
 LV_IMG_DECLARE(traffix_logo)
 
-//LV_IMG_DECLARE(ue_text)
-
-LV_IMG_DECLARE(earth)
+const ESP_EVENT_DECLARE_BASE(UI_EVENT_BASE);
 
 /* ENUMERATIONS --------------------------------------------------------------*/
 
@@ -37,15 +18,15 @@ LV_IMG_DECLARE(earth)
  *
  * This list must match the uiStateList.
  */
-enum {
+typedef enum {
     UI_STATE_INIT = 0,
     UI_STATE_SPLASH,            // show splash screen
     UI_STATE_WIFI_PROVISION,    // show provisioning QR code
     UI_STATE_WIFI_CONNECT,      // show wifi connection status
-    UI_STATE_RADAR,             // show the main display screen.
+    UI_STATE_READY,             // show the main display screen.
     UI_STATE_ALARM,             // show the alarm screen
     UI_STATE_SETTINGS,          // show the settings screen.
-};
+} uiState_t;
 
 /* STRUCTURES & TYPEDEFS -----------------------------------------------------*/
 typedef struct {
@@ -58,24 +39,25 @@ typedef struct {
  */
 
 typedef struct {
-    const char * name;      // a name for this state
-    void (*setup)(lv_obj_t * tile);
-    void (*update)(lv_obj_t * tile);
-    void (*teardown)(lv_obj_t * tile);
-} uiState;
+    const char *name;      // a name for this state
+    void (*setup)(lv_obj_t *tile);
+
+    void (*update)(lv_obj_t *tile);
+
+    void (*teardown)(lv_obj_t *tile);
+} uiScreen_t;
 
 
 /* VARIABLES -----------------------------------------------------------------*/
 
-extern uiState uiStateList[];
-
-extern uiState uiSplash, uiWiFiProvision, uiWiFiConnect, uiRadar;
+extern const uiScreen_t uiSplash, uiWiFiProvision, uiWiFiConnect, uiMain;
+extern uiState_t uiState;
 
 /* FUNCTIONS DECLARATION -----------------------------------------------------*/
 
-void uiLoop(lv_obj_t *scr);     // runs the ui
+extern void uiLoop();     // runs the ui
+extern void setUiState(uiState_t state);
 
 
-#endif /* MAIN_LVGL_DEMO_UI_H_ */
+#endif /* TRAFFIX_UI_H_ */
 
-/**************************  Useful Electronics  ****************END OF FILE***/

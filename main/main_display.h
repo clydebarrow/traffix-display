@@ -1,0 +1,8 @@
+//
+// Created by Clyde Stubbs on 26/10/2022.
+//
+
+#ifndef TRAFFIX_DISPLAY_MAIN_DISPLAY_H
+#define TRAFFIX_DISPLAY_MAIN_DISPLAY_H
+
+#endif //TRAFFIX_DISPLAY_MAIN_DISPLAY_H

@@ -1,15 +1,3 @@
-
-/**
- ******************************************************************************
- * @Channel Link    :  https://www.youtube.com/user/wardzx1
- * @file    		:  main.h
- * @author  		:  Ward Almasarani - Useful Electronics
- * @version 		:  v.1.0
- * @date    		:  Aug 20, 2022
- * @brief   		:
- *
- ******************************************************************************/
-
 #ifndef MAIN_H_
 #define MAIN_H_
 
@@ -62,8 +50,6 @@
 #define WIFI_STATUS_CONNECTED 1
 
 #define ARRAY_SIZE(arr) ((sizeof(arr)/sizeof(arr[0])))
-
-extern EventGroupHandle_t wifi_event_group;
 
 /* FUNCTIONS DECLARATION -----------------------------------------------------*/
 

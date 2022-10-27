@@ -1,19 +1,8 @@
+/* INCLUDES ------------------------------------------------------------------*/
 #include <esp_types.h>
 #include <sys/cdefs.h>
-/**
- ******************************************************************************
- * @Channel Link    :  https://www.youtube.com/user/wardzx1
- * @file    		:  main1.c
- * @author  		:  Ward Almasarani - Useful Electronics
- * @version 		:  v.1.0
- * @date    		:  Aug 20, 2022
- * @brief   		:
- *
- ******************************************************************************/
-
-
-/* INCLUDES ------------------------------------------------------------------*/
 #include <nvs_flash.h>
+#include <esp_event.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
@@ -27,6 +16,7 @@
 
 #include "main.h"
 #include "ui.h"
+#include "events.h"
 /* PRIVATE STRUCTURES ---------------------------------------------------------*/
 
 /* VARIABLES -----------------------------------------------------------------*/
@@ -42,8 +32,6 @@ static lv_disp_t *disp;
 
 /* PRIVATE FUNCTIONS DECLARATION ---------------------------------------------*/
 
-
-static void increaseLvglTick(void *arg);
 
 static bool
 notifyLvglFlushReady(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx);
@@ -72,25 +60,19 @@ static void lvglFlushCb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *c
     esp_lcd_panel_draw_bitmap(panel_handle, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);
 }
 
-static void increaseLvglTick(void *arg) {
-    /* Tell LVGL how many milliseconds has elapsed */
-    lv_tick_inc(TRAFFIX_LVGL_TICK_PERIOD_MS);
-}
-
 // A task to call the LVGL timer periodically.
 _Noreturn static void lvglTimerTask(void *param) {
     static uint64_t lastTime = 0;
     for (;;) {
-        // The task running lv_timer_handler should have lower priority than that running `lv_tick_inc`
         uint64_t nowTime = esp_timer_get_time();
-        // calculate elapsed time,
-        uint32_t elapsed = ((nowTime - lastTime) & 0xFFFFFFFF) / 1000;
+        uint32_t elapsed = ((nowTime - lastTime) & 0xFFFFFFFF) / 1000; // calculate elapsed ms
         lv_tick_inc(elapsed);
         lastTime = nowTime;
-        uint32_t  next = lv_timer_handler();
-        if(next > 200)
+        uint32_t next = lv_timer_handler();
+        if (next > 200)
             next = 200;     // don't sleep for more than 200ms
-
+        else if(next < 10)
+            next = 10;
         vTaskDelay(next / portTICK_PERIOD_MS);
     }
 }
@@ -113,10 +95,6 @@ static void initNvs() {
 }
 
 
-/**
- * @brief Program starts from here
- *
- */
 static void initLcd(void) {
     //GPIO configuration
     ESP_LOGI(TAG, "Turn off LCD backlight");
@@ -130,7 +108,6 @@ static void initLcd(void) {
     gpio_pad_select_gpio(TRAFFIX_PIN_RD);
     gpio_pad_select_gpio(TRAFFIX_PIN_PWR);
 
-    gpio_set_direction(TRAFFIX_PIN_RD, TRAFFIX_PIN_NUM_BK_LIGHT);
     gpio_set_direction(TRAFFIX_PIN_RD, GPIO_MODE_OUTPUT);
     gpio_set_direction(TRAFFIX_PIN_PWR, GPIO_MODE_OUTPUT);
 
@@ -187,6 +164,7 @@ static void initLcd(void) {
 
     ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io_handle, &panel_config, &panel_handle));
 
+    ESP_LOGI(TAG, "REset panel");
     esp_lcd_panel_reset(panel_handle);
     esp_lcd_panel_init(panel_handle);
     esp_lcd_panel_invert_color(panel_handle, true);
@@ -195,6 +173,8 @@ static void initLcd(void) {
     esp_lcd_panel_mirror(panel_handle, false, true);
     // the gap is LCD panel specific, even panels with the same driver IC, can have different gap value
     esp_lcd_panel_set_gap(panel_handle, 0, 35);
+    gpio_set_level(TRAFFIX_PIN_NUM_BK_LIGHT, TRAFFIX_LCD_BK_LIGHT_ON_LEVEL);
+    ESP_LOGI(TAG, "InitLCD done");
 }
 
 static void initGraphics() {
@@ -202,7 +182,7 @@ static void initGraphics() {
     lv_init();
     // alloc draw buffers used by LVGL
     // it's recommended to choose the size of the draw buffer(s) to be at least 1/10 screen sized
-    lv_color_t *buf1 = heap_caps_malloc(LVGL_LCD_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DMA);
+    lv_color_t * buf1 = heap_caps_malloc(LVGL_LCD_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DMA);
     assert(buf1);
 //    lv_color_t *buf2 = heap_caps_malloc(LVGL_LCD_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DMA );
 //    assert(buf2);
@@ -250,18 +230,17 @@ bool buttonPressed(int index) {
 
 _Noreturn static void mainTask(void *param) {
     ESP_LOGI(TAG, "Main task starts");
-    initGraphics();
-    provisionWiFi(buttonPressed(0)); // does not return until WiFi connected.
-    ESP_LOGI(TAG, "Display LVGL animation");
-    lv_obj_t *scr = lv_disp_get_scr_act(disp);
-    uiLoop(scr);
-}
-
-void app_main(void) {
     initNvs();
     initLcd();
     initGpio();
+    initEvents();
     initWiFi();
+    initGraphics();
+    ESP_LOGI(TAG, "Start UI loop");
+    uiLoop();
+}
+
+void app_main(void) {
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
     xTaskCreatePinnedToCore(mainTask, "Main", 16384, NULL, 4, NULL, 1);
 }
-/**************************  Useful Electronics  ****************END OF FILE***/

@@ -1,49 +1,42 @@
-#include <sys/cdefs.h>
-/**
- ******************************************************************************
- * @Channel Link    :  https://www.youtube.com/user/wardzx1
- * @file    		:  uiLoop.c
- * @author  		:  Ward Almasarani - Useful Electronics
- * @version 		:  v.1.0
- * @date    		:  Aug 21, 2022
- * @brief   		:
- *
- ******************************************************************************/
-
-
 /* INCLUDES ------------------------------------------------------------------*/
+#include <sys/cdefs.h>
+#include "freertos/FreeRTOS.h"
 #include <freertos/task.h>
+#include <esp_event.h>
 #include "ui.h"
+#include "events.h"
+#include "main.h"
+#include "extra/widgets/tileview/lv_tileview.h"
 
 static const char *TAG = "ui";
 
-/* PRIVATE STRUCTRES ---------------------------------------------------------*/
+const ESP_EVENT_DEFINE_BASE(UI_EVENT_BASE);
 
 /* VARIABLES -----------------------------------------------------------------*/
+
+static const uiScreen_t uiInit = {
+        .name = "uiInit"
+};
+/**
+ * Order must match the enum
+ */
+static const uiScreen_t *const uiScreens[] = {
+        &uiInit,
+        &uiSplash,
+        &uiWiFiProvision,
+        &uiWiFiConnect,
+        &uiMain
+};
+uiState_t uiState = UI_STATE_INIT;
 
 
 static lv_style_t style;
 static lv_style_t bgStyle;
-static lv_style_t titleStyle;
 
-static lv_obj_t *arc[3];
-static lv_obj_t *img_logo;
+static lv_obj_t *tileView;
 
-static lv_obj_t *dis;
-static lv_obj_t *meter;
+static lv_obj_t *tile0, *tile1;
 
-static lv_obj_t *lebel;
-static lv_obj_t *title;
-
-lv_obj_t *tv1;
-lv_obj_t *tv2;
-
-static lv_color_t arc_color[] =
-{
-    LV_COLOR_MAKE(0xFF, 0x00, 0x28),
-    LV_COLOR_MAKE(0x14, 0xFF, 0x00),
-    LV_COLOR_MAKE(0xFF, 0xFF, 0xFF),
-};
 /* DEFINITIONS ---------------------------------------------------------------*/
 
 /* MACROS --------------------------------------------------------------------*/
@@ -51,185 +44,92 @@ static lv_color_t arc_color[] =
 /* PRIVATE FUNCTIONS DECLARATION ---------------------------------------------*/
 
 
-static void bg_timer_cb(lv_timer_t *timer);
-static void anim_timer_cb(lv_timer_t *timer);
-/* FUNCTION PROTOTYPES -------------------------------------------------------*/
+
 /**
- * @brief 	lvgl screen content termination timer callback
- *
- * @param 	timer	:	pointer to timer settings and user parameters
+ * Set the UI state
  */
-static void bg_timer_cb(lv_timer_t *timer)
-{
-	static uint8_t flipPage = 1;
 
-
-	lv_obj_set_tile_id(dis, 0, flipPage, LV_ANIM_ON);
-
-	flipPage ^= 1;
-
-
+void setUiState(uiState_t state) {
+    esp_event_post_to(loopHandle, UI_EVENT_BASE, state, NULL, 0, 0);
 }
 
-void set_value(void * indic, int32_t v)
-{
-    lv_meter_set_indicator_end_value(meter, indic, v);
+static void tileEventCb(lv_event_t *event) {
+    switch (event->code) {
+        case LV_EVENT_VALUE_CHANGED: {
+            lv_obj_t *tile = lv_tileview_get_tile_act(tileView);
+            ESP_LOGI(TAG, "Tile changed, new tile pos = %d", tile != tile0);
+            // clean up the previous tile
+        }
+            break;
+        default:
+            //ESP_LOGI(TAG, "TileView event %d", event->code);
+            break;
+    }
 }
 
 /**
- * @brief 	lvgl screen animation timer callback
- *
- * @param 	timer	:	pointer to timer settings and user parameters
+ * Process UI state changes
  */
-static void anim_timer_cb(lv_timer_t *timer)
-{
-    my_timer_context_t *timer_ctx = (my_timer_context_t *) timer->user_data;
-    int count = timer_ctx->count_val;
-    lv_obj_t *scr = timer_ctx->scr;
 
-    if (count == 90)
-    {
-        img_logo = lv_img_create(tv1);
-        lv_img_set_src(img_logo, &traffix_logo);
-
-        title = lv_label_create(scr);
-        lv_obj_add_style(title, &titleStyle, 0);
-        lv_label_set_text(title, "USEFUL ELECTRONICS");
-        lv_obj_set_style_text_opa(title, 0, 0);
+static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t newState, void *event_data) {
+    lv_obj_t *scr = lv_scr_act();
+    if (newState >= ARRAY_SIZE(uiScreens)) {
+        ESP_LOGI(TAG, "Request for unknown UI state %d", newState);
+        return;
     }
+    const uiScreen_t *uis = uiScreens[newState];
 
-    // Move images when arc animation finished
-    if ((count >= 100) && (count <= 180))
-    {
-        lv_coord_t offset = (sinf((count - 140) * 2.25f / 90.0f) + 1) * 20.0f;
-        lv_obj_align(img_logo, LV_ALIGN_CENTER, 0, -offset);
-        lv_obj_align(title, LV_ALIGN_CENTER, 0, 1 * offset);
-        //as offset changes increase text opacity
-        lv_obj_set_style_text_opa(title, offset / 40.0f * 255, 0);
+    if (newState == UI_STATE_INIT) {
+        ESP_LOGI(TAG, "UIState initialization");
+        lv_obj_clean(scr);
+        //Initialize 2 tiles that act as pages
+        tileView = lv_tileview_create(scr);
+        lv_obj_set_scrollbar_mode(tileView, LV_SCROLLBAR_MODE_OFF);
+        lv_obj_add_event_cb(tileView, tileEventCb, LV_EVENT_ALL, NULL);
+        lv_obj_align(tileView, LV_ALIGN_TOP_RIGHT, 0, 0);
+        tile0 = lv_tileview_add_tile(tileView, 0, 0, LV_DIR_ALL);
+        tile1 = lv_tileview_add_tile(tileView, 0, 1, LV_DIR_ALL);
+
+        //create style to manipulate objects characteristics implicitly
+        lv_style_init(&style);
+        lv_style_init(&bgStyle);
+        lv_style_set_bg_color(&bgStyle, lv_color_black());
+        lv_obj_add_style(tileView, &bgStyle, 0);
+        uiState = newState;
+        return;
     }
-
-
-
-    // Delete timer when all animation finished
-    if ((count += 5) == 220)
-    {
-        lv_timer_del(timer);
-        //use full color with the title text
-        lv_obj_set_style_text_opa(title, 255, 0);
-
-        //Create rolling text
-        lebel = lv_label_create(scr);
-        lv_obj_add_style(lebel, &style, 0);
-        lv_label_set_long_mode(lebel, LV_LABEL_LONG_SCROLL_CIRCULAR);     /*Circular scroll*/
-        //To let scroll feature work properly, the text size must be larger than the assigned size.
-        lv_obj_set_width(lebel, 150);
-        lv_label_set_text(lebel, "SUBSCRIBE");
-        lv_obj_align(lebel, LV_ALIGN_CENTER, 0, 65);
-
-        //create page flip timer
-        lv_timer_create(bg_timer_cb, 10000, NULL);
+    if (newState == uiState) {
+        //ESP_LOGI(TAG, "UIState unchanged at %s", uis->name);
+        return;
     }
+    ESP_LOGI(TAG, "UIState changes to %s", uis->name);
+    //if(uiScreens[uiState]->teardown != NULL)
+    //   uiScreens[uiState]->teardown(curTile);
+    uiState = newState;
+    lv_obj_t *curTile = lv_tileview_get_tile_act(tileView);
+
+    if (curTile == tile0)
+        curTile = tile1;
     else
-    {
-        timer_ctx->count_val = count;
-    }
+        curTile = tile0;
+    lv_obj_clean(curTile);
+    uis->setup(curTile);
+    // show the new tile
+    lv_obj_set_tile(tileView, curTile, LV_ANIM_ON);
 }
 
 /**
- * This function manages the
+ * This function manages the different ui screens
  */
-_Noreturn void uiLoop(lv_obj_t *scr)
-{
+_Noreturn void uiLoop() {
 
-	//Initialize 2 tiles that act as pages
-    lv_obj_clean(scr);
-	dis = lv_tileview_create(scr);
-	lv_obj_align(dis, LV_ALIGN_TOP_RIGHT, 0, 0);
-	tv1 = lv_tileview_add_tile(dis, 0, 0, LV_DIR_HOR);
-	tv2 = lv_tileview_add_tile(dis, 0, 1, LV_DIR_HOR);
-
-    ESP_LOGI(TAG, "Create styles");
-    //create style to manipulate objects characteristics implicitly
-    lv_style_init(&style);
-    lv_style_init(&bgStyle);
-    lv_style_init(&titleStyle);
-
-    //lv_color_hex(0xblue 0xred 0xgreen) //0xF8FCF8 is white
-    lv_color_t textColor16 = lv_color_hex(0x14FF00);	//0x014FF00	is purple
-    lv_style_set_text_color(&style,textColor16);
-    lv_style_set_text_font(&style,  &lv_font_montserrat_28);
-    //Change background color
-    textColor16 = lv_color_hex(0x000000);
-    lv_obj_add_style(dis, &bgStyle, 0);
-    lv_style_set_bg_color(&bgStyle, textColor16);
-    //Change title text style
-    textColor16 = lv_color_hex(0xFF0028);				//0xF8FCF8 is white //0xFF0028 is cyan
-    lv_style_set_text_color(&titleStyle,textColor16);
-    lv_style_set_text_font(&titleStyle,  &lv_font_montserrat_26);
-
-    // Create timer for animation
-    static my_timer_context_t my_tim_ctx =
-    {
-        .count_val = -200,
-    };
-    my_tim_ctx.scr = tv1;
-
-    /* page 2 */
-    meter = lv_meter_create(tv2);
-	lv_obj_center(meter);
-	lv_obj_set_size(meter, 170, 170);
-
-	/*Remove the circle from the middle*/
-	lv_obj_remove_style(meter, NULL, LV_PART_INDICATOR);
-
-	/*Add a scale first*/
-	lv_meter_scale_t * scale = lv_meter_add_scale(meter);
-	lv_meter_set_scale_ticks(meter, scale, 11, 2, 10, lv_palette_main(LV_PALETTE_GREY));
-	lv_meter_set_scale_major_ticks(meter, scale, 1, 2, 15, lv_color_hex3(0xeee), 10);
-	lv_meter_set_scale_range(meter, scale, 0, 100, 270, 90);
-
-	/*Add a three arc indicator*/
-	lv_meter_indicator_t * indic1 = lv_meter_add_arc(meter, scale, 10, lv_color_hex3(0x00F), 0);
-	lv_meter_indicator_t * indic2 = lv_meter_add_arc(meter, scale, 10, lv_color_hex3(0x0F0), -10);
-	lv_meter_indicator_t * indic3 = lv_meter_add_arc(meter, scale, 10, lv_color_hex3(0xF00), -20);
-
-	/*Create an animation to set the value*/
-	lv_anim_t a;
-	lv_anim_init(&a);
-	lv_anim_set_exec_cb(&a, set_value);
-	lv_anim_set_values(&a, 0, 100);
-	lv_anim_set_repeat_delay(&a, 100);
-	lv_anim_set_playback_delay(&a, 100);
-	lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-
-	lv_anim_set_time(&a, 2000);
-	lv_anim_set_playback_time(&a, 500);
-	lv_anim_set_var(&a, indic1);
-	lv_anim_start(&a);
-
-	lv_anim_set_time(&a, 1000);
-	lv_anim_set_playback_time(&a, 1000);
-	lv_anim_set_var(&a, indic2);
-	lv_anim_start(&a);
-
-	lv_anim_set_time(&a, 1000);
-	lv_anim_set_playback_time(&a, 2000);
-	lv_anim_set_var(&a, indic3);
-	lv_anim_start(&a);
-	/* page 3 */
-
-
-    lv_timer_create(anim_timer_cb, 20, &my_tim_ctx);
-    for(;;) {
+    esp_event_handler_register_with(loopHandle, UI_EVENT_BASE, ESP_EVENT_ANY_ID, uiEventHandler, NULL);
+    setUiState(UI_STATE_INIT);      // perform initialisation
+    setUiState(UI_STATE_SPLASH);
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    postMessage(EVENT_WIFI_CHANGE, NULL, 0);
+    for (;;) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
-        ESP_LOGI(TAG, "task tick");
+        //ESP_LOGI(TAG, "task tick");
     }
 }
-
-
-/**************************  Useful Electronics  ****************END OF FILE***/
-
-
-
-
-
