@@ -6,13 +6,14 @@
 #include "ui.h"
 #include "events.h"
 #include "main.h"
-#include "extra/widgets/tileview/lv_tileview.h"
 
 static const char *TAG = "ui";
 
 const ESP_EVENT_DEFINE_BASE(UI_EVENT_BASE);
 
 /* VARIABLES -----------------------------------------------------------------*/
+
+const uiScreen_t *currentScreen;
 
 static const uiScreen_t uiInit = {
         .name = "uiInit"
@@ -28,22 +29,7 @@ static const uiScreen_t *const uiScreens[] = {
         &uiMain
 };
 uiState_t uiState = UI_STATE_INIT;
-
-
-static lv_style_t style;
 static lv_style_t bgStyle;
-
-static lv_obj_t *tileView;
-
-static lv_obj_t *tile0, *tile1;
-
-/* DEFINITIONS ---------------------------------------------------------------*/
-
-/* MACROS --------------------------------------------------------------------*/
-
-/* PRIVATE FUNCTIONS DECLARATION ---------------------------------------------*/
-
-
 
 /**
  * Set the UI state
@@ -53,18 +39,11 @@ void setUiState(uiState_t state) {
     esp_event_post_to(loopHandle, UI_EVENT_BASE, state, NULL, 0, 0);
 }
 
-static void tileEventCb(lv_event_t *event) {
-    switch (event->code) {
-        case LV_EVENT_VALUE_CHANGED: {
-            lv_obj_t *tile = lv_tileview_get_tile_act(tileView);
-            ESP_LOGI(TAG, "Tile changed, new tile pos = %d", tile != tile0);
-            // clean up the previous tile
-        }
-            break;
-        default:
-            //ESP_LOGI(TAG, "TileView event %d", event->code);
-            break;
-    }
+static void tileDeleteCb(lv_event_t * event) {
+    uiScreen_t * uis = event->user_data;
+    ESP_LOGI(TAG, "delete tile for %s", uis->name);
+    if(uis->teardown)
+        uis->teardown(event->target);
 }
 
 /**
@@ -72,50 +51,40 @@ static void tileEventCb(lv_event_t *event) {
  */
 
 static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t newState, void *event_data) {
-    lv_obj_t *scr = lv_scr_act();
     if (newState >= ARRAY_SIZE(uiScreens)) {
         ESP_LOGI(TAG, "Request for unknown UI state %d", newState);
         return;
     }
-    const uiScreen_t *uis = uiScreens[newState];
+    currentScreen = uiScreens[newState];
 
     if (newState == UI_STATE_INIT) {
+        // show the new tile
         ESP_LOGI(TAG, "UIState initialization");
-        lv_obj_clean(scr);
-        //Initialize 2 tiles that act as pages
-        tileView = lv_tileview_create(scr);
-        lv_obj_set_scrollbar_mode(tileView, LV_SCROLLBAR_MODE_OFF);
-        lv_obj_add_event_cb(tileView, tileEventCb, LV_EVENT_ALL, NULL);
-        lv_obj_align(tileView, LV_ALIGN_TOP_RIGHT, 0, 0);
-        tile0 = lv_tileview_add_tile(tileView, 0, 0, LV_DIR_ALL);
-        tile1 = lv_tileview_add_tile(tileView, 0, 1, LV_DIR_ALL);
 
         //create style to manipulate objects characteristics implicitly
-        lv_style_init(&style);
         lv_style_init(&bgStyle);
         lv_style_set_bg_color(&bgStyle, lv_color_black());
-        lv_obj_add_style(tileView, &bgStyle, 0);
+        lv_obj_t *curTile = lv_obj_create(NULL);
+        lv_obj_add_style(curTile, &bgStyle, 0);
+        lv_scr_load(curTile);
         uiState = newState;
         return;
     }
     if (newState == uiState) {
-        //ESP_LOGI(TAG, "UIState unchanged at %s", uis->name);
+        //ESP_LOGI(TAG, "UIState unchanged at %s", currentScreen->name);
         return;
     }
-    ESP_LOGI(TAG, "UIState changes to %s", uis->name);
+    ESP_LOGI(TAG, "UIState changes to %s", currentScreen->name);
     //if(uiScreens[uiState]->teardown != NULL)
     //   uiScreens[uiState]->teardown(curTile);
     uiState = newState;
-    lv_obj_t *curTile = lv_tileview_get_tile_act(tileView);
-
-    if (curTile == tile0)
-        curTile = tile1;
-    else
-        curTile = tile0;
-    lv_obj_clean(curTile);
-    uis->setup(curTile);
+    lv_obj_t *curTile = lv_obj_create(NULL);
+    lv_obj_add_style(curTile, &bgStyle, 0);
+    currentScreen->setup(curTile);
+    lv_obj_add_event_cb(curTile, tileDeleteCb, LV_EVENT_DELETE, (void *)currentScreen);
     // show the new tile
-    lv_obj_set_tile(tileView, curTile, LV_ANIM_ON);
+    lv_scr_load_anim(curTile, LV_SCR_LOAD_ANIM_FADE_IN, 400, 0, true);
+    setBacklightState(true);
 }
 
 /**
@@ -125,11 +94,14 @@ _Noreturn void uiLoop() {
 
     esp_event_handler_register_with(loopHandle, UI_EVENT_BASE, ESP_EVENT_ANY_ID, uiEventHandler, NULL);
     setUiState(UI_STATE_INIT);      // perform initialisation
+    vTaskDelay(100 / portTICK_PERIOD_MS);
     setUiState(UI_STATE_SPLASH);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
     postMessage(EVENT_WIFI_CHANGE, NULL, 0);
     for (;;) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(250 / portTICK_PERIOD_MS);       // update the screen every this long
+        if(currentScreen && currentScreen->update)
+            currentScreen->update(lv_scr_act());
         //ESP_LOGI(TAG, "task tick");
     }
 }

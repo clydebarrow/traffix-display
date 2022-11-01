@@ -39,7 +39,6 @@ notifyLvglFlushReady(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_
 static void lvglFlushCb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map);
 
 
-_Noreturn static void lvglTimerTask(void *param);
 
 /* FUNCTION PROTOTYPES -------------------------------------------------------*/
 
@@ -68,10 +67,11 @@ _Noreturn static void lvglTimerTask(void *param) {
         uint32_t elapsed = ((nowTime - lastTime) & 0xFFFFFFFF) / 1000; // calculate elapsed ms
         lv_tick_inc(elapsed);
         lastTime = nowTime;
+        //ESP_LOGI(TAG, "lvgl timer elapsed=%d", elapsed);
         uint32_t next = lv_timer_handler();
-        if (next > 200)
-            next = 200;     // don't sleep for more than 200ms
-        else if(next < 10)
+        if (next > 50)
+            next = 50;     // don't sleep for more than this
+        else if (next < 10)
             next = 10;
         vTaskDelay(next / portTICK_PERIOD_MS);
     }
@@ -94,6 +94,10 @@ static void initNvs() {
     }
 }
 
+void setBacklightState(bool on) {
+    gpio_set_level(TRAFFIX_PIN_NUM_BK_LIGHT,
+                   on ? TRAFFIX_LCD_BK_LIGHT_ON_LEVEL : TRAFFIX_LCD_BK_LIGHT_OFF_LEVEL);
+}
 
 static void initLcd(void) {
     //GPIO configuration
@@ -112,6 +116,7 @@ static void initLcd(void) {
     gpio_set_direction(TRAFFIX_PIN_PWR, GPIO_MODE_OUTPUT);
 
     gpio_set_level(TRAFFIX_PIN_RD, true);
+    setBacklightState(false);
     gpio_set_level(TRAFFIX_PIN_NUM_BK_LIGHT, TRAFFIX_LCD_BK_LIGHT_OFF_LEVEL);
 
     ESP_LOGI(TAG, "Initialize Intel 8080 bus");
@@ -173,7 +178,6 @@ static void initLcd(void) {
     esp_lcd_panel_mirror(panel_handle, false, true);
     // the gap is LCD panel specific, even panels with the same driver IC, can have different gap value
     esp_lcd_panel_set_gap(panel_handle, 0, 35);
-    gpio_set_level(TRAFFIX_PIN_NUM_BK_LIGHT, TRAFFIX_LCD_BK_LIGHT_ON_LEVEL);
     ESP_LOGI(TAG, "InitLCD done");
 }
 
@@ -182,7 +186,7 @@ static void initGraphics() {
     lv_init();
     // alloc draw buffers used by LVGL
     // it's recommended to choose the size of the draw buffer(s) to be at least 1/10 screen sized
-    lv_color_t * buf1 = heap_caps_malloc(LVGL_LCD_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DMA);
+    lv_color_t *buf1 = heap_caps_malloc(LVGL_LCD_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DMA);
     assert(buf1);
 //    lv_color_t *buf2 = heap_caps_malloc(LVGL_LCD_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_DMA );
 //    assert(buf2);
@@ -242,5 +246,5 @@ _Noreturn static void mainTask(void *param) {
 
 void app_main(void) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    xTaskCreatePinnedToCore(mainTask, "Main", 16384, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(mainTask, "Main", 16000, NULL, 4, NULL, 1);
 }

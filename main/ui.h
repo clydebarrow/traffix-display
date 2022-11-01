@@ -40,11 +40,11 @@ typedef struct {
 
 typedef struct {
     const char *name;      // a name for this state
-    void (*setup)(lv_obj_t *tile);
+    void (*setup)(lv_obj_t *tile);      // called to create the view
 
-    void (*update)(lv_obj_t *tile);
+    void (*update)(lv_obj_t *tile);     // update the view
 
-    void (*teardown)(lv_obj_t *tile);
+    void (*teardown)(lv_obj_t *tile);   // view is being deleted, clean up.
 } uiScreen_t;
 
 

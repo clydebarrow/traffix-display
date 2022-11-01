@@ -56,6 +56,7 @@
 extern void initWiFi();
 extern void provisionWiFi(bool force);
 extern bool buttonPressed(int index);
+extern void setBacklightState(bool on);
 
 
 #endif /* MAIN_H_ */

@@ -11,10 +11,10 @@
 #include <wifi_provisioning/scheme_ble.h>
 #include <esp_log.h>
 #include <string.h>
+#include <lvgl.h>
 #include "main.h"
 #include "ui.h"
 #include "wifi_prov.h"
-#include "lv_qrcode.h"
 #include "events.h"
 
 static const char *TAG = "WiFi";
@@ -191,7 +191,6 @@ static void qrShow(lv_obj_t *tv) {
     lv_obj_align(qrCodeImage, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_border_color(qrCodeImage, lv_color_black(), 0);
     lv_obj_set_style_border_width(qrCodeImage, 5, 0);
-    ESP_LOGI(TAG, "Add data to QR code");
     lv_qrcode_update(qrCodeImage, payload, strlen(payload));
     initStyle();
     provLabel = lv_label_create(tv);
@@ -200,6 +199,7 @@ static void qrShow(lv_obj_t *tv) {
     lv_obj_set_style_border_width(provLabel, 2, 0);
     lv_obj_align(provLabel, LV_ALIGN_RIGHT_MID, 0, 0);
     lv_label_set_text(provLabel, "Provision\nWiFi with\nESP Ble App");
+    ESP_LOGI(TAG, "qrShow done");
 }
 
 /**
