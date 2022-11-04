@@ -7,7 +7,10 @@
 #include "ui.h"
 #include "wifi_prov.h"
 #include "main.h"
+#include "status.h"
 
+
+static const char *TAG = "Events";
 
 const ESP_EVENT_DEFINE_BASE(EVENT_BASE);
 esp_event_loop_handle_t loopHandle;
@@ -20,28 +23,42 @@ esp_event_loop_handle_t loopHandle;
  * @param event_data
  */
 static void eventHandler(void *handler_arg, esp_event_base_t base, int32_t eventId, void *event_data) {
-    switch(wifiState) {
+    switch (eventId) {
 
-        case WIFI_UNKNOWN:
-            provisionWiFi(buttonPressed(0));
-            return;
+        case EVENT_WIFI_CHANGE:
 
-        case WIFI_PROVISIONING:
-            setUiState(UI_STATE_WIFI_PROVISION);
-            return;
+            switch (wifiState) {
 
-        case WIFI_CONNECTING:
-            setUiState(UI_STATE_WIFI_CONNECT);
-            return;
+                case WIFI_UNKNOWN:
+                    statusInit();
+                    provisionWiFi(buttonPressed(0));
+                    break;
 
-        case WIFI_CONNECTED:
-            setUiState(UI_STATE_READY);
-            return;
+                case WIFI_PROVISIONING:
+                    setUiState(UI_STATE_WIFI_PROVISION);
+                    break;
 
-        default:    // connected, all good.
+                case WIFI_CONNECTING:
+                    setUiState(UI_STATE_WIFI_CONNECT);
+                    break;
+
+                case WIFI_CONNECTED:
+                    setUiState(UI_STATE_READY);
+                    break;
+
+                default:    // connected, all good.
+                    break;
+            }
+
+        case EVENT_GDL90_CHANGE:
+            break;
+        default:
+            ESP_LOGI(TAG, "Event %d received", eventId);
             break;
     }
+    statusUpdate();
 }
+
 /**
  * Listen for events and manage state accordingly
  */
@@ -54,9 +71,9 @@ void initEvents() {
             .task_stack_size = 16000
     };
     esp_event_loop_create(&loopArgs, &loopHandle);
-    esp_event_handler_register_with(loopHandle, EVENT_BASE, EVENT_WIFI_CHANGE, eventHandler, NULL);
-
+    esp_event_handler_register_with(loopHandle, EVENT_BASE, ESP_EVENT_ANY_ID, eventHandler, NULL);
 }
-int postMessage(int32_t id, void * data, size_t len) {
+
+int postMessage(int32_t id, void *data, size_t len) {
     return esp_event_post_to(loopHandle, EVENT_BASE, id, data, len, 0);
 }

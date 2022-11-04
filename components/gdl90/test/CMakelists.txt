@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.23.2)
+project(gdl90test)
+
+add_executable(gdl90Test gdl90test.c tests.c ../gdl90.c ../riemann.c)
+target_include_directories(gdl90Test PUBLIC ../include)

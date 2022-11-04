@@ -13,6 +13,7 @@ extern esp_event_loop_handle_t loopHandle;
 
 enum {
     EVENT_WIFI_CHANGE,
+    EVENT_GDL90_CHANGE,
 };
 
 extern void initEvents();

@@ -13,5 +13,8 @@ typedef enum {
 } wifiState_t;
 
 extern wifiState_t wifiState;
+extern bool isWifiConnected();
+extern void initWiFi();
+extern void provisionWiFi(bool force);
 
 #endif //TRAFFIX_DISPLAY_WIFI_PROV_H

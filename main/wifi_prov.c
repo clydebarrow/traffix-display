@@ -25,6 +25,7 @@ static lv_obj_t *qrCodeImage;
 static lv_obj_t *provLabel;
 static lv_obj_t *connectLabel;
 static lv_style_t titleStyle;
+static lv_style_t arcStyle;
 
 /* Signal Wi-Fi events on this event-group */
 
@@ -209,12 +210,19 @@ static void qrShow(lv_obj_t *tv) {
 static void connectShow(lv_obj_t *tv) {
     connectLabel = lv_label_create(tv);
     initStyle();
-    lv_obj_center(connectLabel);
+    lv_obj_align(connectLabel, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_add_style(connectLabel, &titleStyle, 0);
 
     wifi_config_t wifi_cfg;
     esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg);
     lv_label_set_text_fmt(connectLabel, "Connecting to WiFi\nSSID: %.32s", wifi_cfg.sta.ssid);
+    lv_obj_t * spinner = lv_spinner_create(tv, 1000, 60);
+    lv_obj_set_size(spinner, 60, 60);
+    lv_obj_align(spinner, LV_ALIGN_RIGHT_MID, -4, 0);
+    lv_style_init(&arcStyle);
+    lv_style_set_arc_width(&arcStyle, 5);
+    lv_obj_add_style(spinner, &arcStyle, LV_PART_INDICATOR);
+    lv_obj_add_style(spinner, &arcStyle, LV_PART_MAIN);
 }
 
 const uiScreen_t uiWiFiProvision = {
@@ -229,3 +237,7 @@ const uiScreen_t uiWiFiConnect = {
         .update = NULL,
         .teardown = NULL
 };
+
+bool isWifiConnected() {
+    return wifiState == WIFI_CONNECTED;
+}

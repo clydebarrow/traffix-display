@@ -1,0 +1,19 @@
+menu "Target board selection"
+    choice TRAFFIX_TARGET_BOARD
+        prompt "Target board"
+        default TRAFFIX_TARGET_T_DISPLAY_S3
+        help
+            Choose the target board to compile for.
+
+        config TRAFFIX_TARGET_T_DISPLAY_S3
+            bool "LilyGO T-Display-S3"
+            help
+                Select this when using the LilyGO T-Display-S3 board
+
+        config TRAFFIX_TARGET_T_EMBED
+            bool "LilyGO T-Embed"
+            help
+                Select this when using the LilyGO T-Display-S3 board
+
+    endchoice
+endmenu

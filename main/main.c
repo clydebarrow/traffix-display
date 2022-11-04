@@ -3,6 +3,7 @@
 #include <sys/cdefs.h>
 #include <nvs_flash.h>
 #include <esp_event.h>
+#include <driver/spi_common.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
@@ -17,6 +18,8 @@
 #include "main.h"
 #include "ui.h"
 #include "events.h"
+#include "gdltask.h"
+#include "wifi_prov.h"
 /* PRIVATE STRUCTURES ---------------------------------------------------------*/
 
 /* VARIABLES -----------------------------------------------------------------*/
@@ -24,7 +27,6 @@ static const char *TAG = "main";
 static lv_disp_draw_buf_t disp_buf; // contains internal graphic buffer(s) called draw buffer(s)
 static lv_disp_drv_t disp_drv;      // contains callback functions
 static esp_lcd_panel_handle_t panel_handle = NULL;
-static lv_disp_t *disp;
 
 /* DEFINITIONS ---------------------------------------------------------------*/
 
@@ -37,7 +39,6 @@ static bool
 notifyLvglFlushReady(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx);
 
 static void lvglFlushCb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map);
-
 
 
 /* FUNCTION PROTOTYPES -------------------------------------------------------*/
@@ -101,6 +102,7 @@ void setBacklightState(bool on) {
 
 static void initLcd(void) {
     //GPIO configuration
+    esp_lcd_panel_io_handle_t io_handle = NULL;
     ESP_LOGI(TAG, "Turn off LCD backlight");
     gpio_config_t bk_gpio_config = {
             .mode = GPIO_MODE_OUTPUT,
@@ -109,6 +111,38 @@ static void initLcd(void) {
     ESP_ERROR_CHECK(gpio_config(&bk_gpio_config));
 
     gpio_pad_select_gpio(TRAFFIX_PIN_NUM_BK_LIGHT);
+    setBacklightState(false);
+
+#ifdef  CONFIG_TRAFFIX_TARGET_T_EMBED
+    spi_bus_config_t buscfg = {
+            .sclk_io_num = TRAFFIX_PIN_NUM_PCLK,
+            .mosi_io_num = TRAFFIX_PIN_NUM_DATA0,
+            .miso_io_num = -1,
+            .quadwp_io_num = -1,
+            .quadhd_io_num = -1,
+            .max_transfer_sz = PARALLEL_LINES * TRAFFIX_LCD_H_RES * 2 + 8
+    };
+    ESP_ERROR_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO));
+    esp_lcd_panel_io_spi_config_t io_config = {
+            .dc_gpio_num = TRAFFIX_PIN_NUM_DC,
+            .cs_gpio_num = TRAFFIX_PIN_NUM_CS,
+            .pclk_hz = TRAFFIX_LCD_PIXEL_CLOCK_HZ,
+            .lcd_cmd_bits = TRAFFIX_LCD_CMD_BITS,
+            .lcd_param_bits = TRAFFIX_LCD_PARAM_BITS,
+            .spi_mode = 0,
+            .trans_queue_depth = 10,
+    };
+    ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t) SPI2_HOST, &io_config, &io_handle));
+    esp_lcd_panel_dev_config_t panel_config =
+            {
+                    .reset_gpio_num = TRAFFIX_PIN_NUM_RST,
+                    .color_space = ESP_LCD_COLOR_SPACE_RGB,
+                    .bits_per_pixel = 16,
+            };
+
+    ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io_handle, &panel_config, &panel_handle));
+#endif
+#ifdef CONFIG_TRAFFIX_TARGET_T_DISPLAY_S3
     gpio_pad_select_gpio(TRAFFIX_PIN_RD);
     gpio_pad_select_gpio(TRAFFIX_PIN_PWR);
 
@@ -116,8 +150,6 @@ static void initLcd(void) {
     gpio_set_direction(TRAFFIX_PIN_PWR, GPIO_MODE_OUTPUT);
 
     gpio_set_level(TRAFFIX_PIN_RD, true);
-    setBacklightState(false);
-    gpio_set_level(TRAFFIX_PIN_NUM_BK_LIGHT, TRAFFIX_LCD_BK_LIGHT_OFF_LEVEL);
 
     ESP_LOGI(TAG, "Initialize Intel 8080 bus");
     esp_lcd_i80_bus_handle_t i80_bus = NULL;
@@ -140,7 +172,6 @@ static void initLcd(void) {
             .max_transfer_bytes = LVGL_LCD_BUF_SIZE * sizeof(uint16_t)
     };
     ESP_ERROR_CHECK(esp_lcd_new_i80_bus(&bus_config, &i80_bus));
-    esp_lcd_panel_io_handle_t io_handle = NULL;
     esp_lcd_panel_io_i80_config_t io_config = {
             .cs_gpio_num = TRAFFIX_PIN_NUM_CS,
             .pclk_hz = TRAFFIX_LCD_PIXEL_CLOCK_HZ,
@@ -157,9 +188,6 @@ static void initLcd(void) {
             .lcd_param_bits = TRAFFIX_LCD_PARAM_BITS,
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_i80(i80_bus, &io_config, &io_handle));
-
-    ESP_LOGI(TAG, "Install LCD driver of st7789");
-
     esp_lcd_panel_dev_config_t panel_config =
             {
                     .reset_gpio_num = TRAFFIX_PIN_NUM_RST,
@@ -168,7 +196,7 @@ static void initLcd(void) {
             };
 
     ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io_handle, &panel_config, &panel_handle));
-
+#endif
     ESP_LOGI(TAG, "REset panel");
     esp_lcd_panel_reset(panel_handle);
     esp_lcd_panel_init(panel_handle);
@@ -200,11 +228,11 @@ static void initGraphics() {
     disp_drv.flush_cb = lvglFlushCb;
     disp_drv.draw_buf = &disp_buf;
     disp_drv.user_data = panel_handle;
-    disp = lv_disp_drv_register(&disp_drv);
+    lv_disp_drv_register(&disp_drv);
 
     lv_obj_clean(lv_scr_act());
     // start the animation timer on core 1 (APP)
-    xTaskCreatePinnedToCore(lvglTimerTask, "lvgl Timer", 10000, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(lvglTimerTask, "lvgl Timer", 32768, NULL, 4, NULL, 1);
 }
 
 static int buttonGpios[] = {
@@ -232,7 +260,7 @@ bool buttonPressed(int index) {
  */
 
 
-_Noreturn static void mainTask(void *param) {
+static void mainTask(void *param) {
     ESP_LOGI(TAG, "Main task starts");
     initNvs();
     initLcd();
@@ -247,4 +275,5 @@ _Noreturn static void mainTask(void *param) {
 void app_main(void) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     xTaskCreatePinnedToCore(mainTask, "Main", 16000, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(gdlTask, "UDPRx", 16000, NULL, 4, NULL, 0);
 }
