@@ -14,6 +14,7 @@ LV_IMG_DECLARE(traffic_icon)
 
 static lv_style_t activeStyle, inActiveStyle;
 static lv_color_t activeColor, inActiveColor;
+static bool statusInited;
 
 // the list of status icons to display
 static struct {
@@ -49,9 +50,10 @@ static void setState(lv_obj_t *image, bool enabled) {
  * Update the status images
  */
 void statusUpdate() {
-    for (int i = 0; i != ARRAY_SIZE(images); i++) {
-        setState(images[i].image, images[i].enabled());
-    }
+    if (statusInited)
+        for (int i = 0; i != ARRAY_SIZE(images); i++) {
+            setState(images[i].image, images[i].enabled());
+        }
 }
 
 /**
@@ -78,5 +80,6 @@ void statusInit() {
         lv_obj_add_style(img, &inActiveStyle, LV_STATE_DEFAULT);
         lv_obj_add_style(img, &activeStyle, LV_STATE_USER_1);
     }
+    statusInited = true;
     statusUpdate();
 }

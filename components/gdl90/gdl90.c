@@ -84,6 +84,12 @@ float fromFt(float feet) {
     return feet * 0.3048f;
 }
 
+/**
+ * Get the distance between two traffic reports
+ * @param p1 first object
+ * @param p2  second object
+ * @return distance in meters
+ */
 float trafficDistance(const gdl90PositionReport_t *p1, const gdl90PositionReport_t *p2) {
     return greatCircleDistance(p1->latitude, p1->longitude, p2->latitude, p2->longitude);
 }

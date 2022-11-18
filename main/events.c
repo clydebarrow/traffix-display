@@ -30,8 +30,7 @@ static void eventHandler(void *handler_arg, esp_event_base_t base, int32_t event
             switch (wifiState) {
 
                 case WIFI_UNKNOWN:
-                    statusInit();
-                    provisionWiFi(buttonPressed(0));
+                    provisionWiFi(isButtonPressed(0));
                     break;
 
                 case WIFI_PROVISIONING:
@@ -65,7 +64,7 @@ static void eventHandler(void *handler_arg, esp_event_base_t base, int32_t event
 void initEvents() {
     esp_event_loop_args_t loopArgs = {
             .queue_size = 20,
-            .task_name = "UILoop",
+            .task_name = "UIEvents",
             .task_priority = 2,
             .task_core_id = APP_CPU_NUM,
             .task_stack_size = 16000

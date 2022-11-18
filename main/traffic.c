@@ -4,11 +4,11 @@
 
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
+#include <math.h>
 #include "traffic.h"
 #include "gdltask.h"
-
-
-
+#include "preferences.h"
+#include "main.h"
 
 traffic_t traffic[MAX_TRAFFIC_TRACKED];
 
@@ -22,11 +22,11 @@ static void printPosition(bool ownship, const traffic_t *pr) {
            pr->report.groundSpeed * 3600.0f / 1852.0f,
            pr->report.altitude / 0.3048f,
            pr->report.track,
-           (float)(now-pr->timestamp)/ 1000.0f);
+           (float) (now - pr->timestampMs) / 1000.0f);
 }
 
 static void updateTraffic(traffic_t *tp, const gdl90PositionReport_t *report, float distance) {
-    tp->timestamp = (uint32_t) (esp_timer_get_time() / 1000);
+    tp->timestampMs = (uint32_t) (esp_timer_get_time() / 1000);
     tp->report = *report;
     tp->distance = distance;
     tp->active = true;
@@ -37,20 +37,20 @@ static void updateTraffic(traffic_t *tp, const gdl90PositionReport_t *report, fl
  * the one that is furthest away
  * @return
  */
-static traffic_t * getEntry() {
-    traffic_t * furthest = NULL;
+static traffic_t *getEntry() {
+    traffic_t *furthest = NULL;
     uint32_t oldMs = esp_timer_get_time() / 1000 - MAX_TRAFFIC_AGE_MS;
     TARGETS_FOREACH(tp) {
-        if(tp->timestamp < oldMs)
+        if (tp->timestampMs < oldMs)
             return tp;
-        if(furthest == NULL || tp->distance > furthest->distance)
+        if (furthest == NULL || tp->distance > furthest->distance)
             furthest = tp;
     }
     return furthest;
 }
 
 void processTraffic(const gdl90PositionReport_t *report) {
-    float distance = trafficDistance(&ourPosition.report, report);     // pre-calculate
+    float distance = trafficDistance(&ourPosition.report, report);     // pre-calculate distance in meters
     // is the target currently in our list? If so just update it
     TARGETS_FOREACH(tp) {
         if (tp->report.addressType == report->addressType && tp->report.address == report->address) {
@@ -58,32 +58,26 @@ void processTraffic(const gdl90PositionReport_t *report) {
             return;
         }
     }
-    traffic_t * tp = getEntry();
-    if(tp->distance == 0 || tp->distance > distance)
+    // filter it out if too far away, unless overridden.
+    float vDiff = fabsf(report->altitude - ourPosition.report.altitude);
+    if ((distance > (float) prefRangeH.currentValue.intValue || vDiff > (float) prefRangeV.currentValue.intValue) &&
+        !isButtonPressed(0))
+        return;
+    traffic_t *tp = getEntry();
+    // commandeer the slot if it's outdated, or further away than the new target
+    if (tp->timestampMs < getNow() + MAX_TRAFFIC_AGE_MS || tp->distance > distance)
         updateTraffic(tp, report, distance);
 }
 
-void trafficUpdateActive() {
-    uint32_t oldMs = esp_timer_get_time() / 1000 - MAX_TRAFFIC_AGE_MS;
-    TARGETS_FOREACH(tp) {
-        if(tp->active && tp->timestamp < oldMs)
-            tp->active = false;
-    }
-}
 void showTraffic() {
     uint32_t oldMs = esp_timer_get_time() / 1000 - MAX_TRAFFIC_AGE_MS;
-    int cnt = MAX_TRAFFIC_TRACKED;
-    TARGETS_FOREACH(tp) {
-        if (tp->timestamp >= oldMs)
-            cnt++;
-    }
     // move cursor up and clear screen
-    printf("\r\033[%dA\033[J", cnt+2);
+    //printf("\r\033[%dA\033[J", cnt+2);
     printf("heap free, = %d smallest  = %d\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
     printPosition(true, &ourPosition);
     printf("\n");
     TARGETS_FOREACH(tp) {
-        if (tp->timestamp >= oldMs) {
+        if (tp->timestampMs >= oldMs) {
             printPosition(false, tp);
             printf("\n");
         }

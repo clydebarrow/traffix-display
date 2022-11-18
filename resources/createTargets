@@ -1,0 +1,13 @@
+#! /bin/sh
+angle=0
+echo "// list of target files" > filelist.c
+while [ $angle != "360" ]
+do
+    sed "s/rotate(000/rotate($angle/" <target.svg >rotated.svg
+    convert -background transparent rotated.svg target_$angle.png
+    esp-image-convert target_$angle.png CF_INDEXED_2_BIT
+    mv target_$angle.c ../main/images/
+    rm target_$angle.png
+    echo "LV_IMG_DECLARE(target_$angle)" >> filelist.c
+    angle=`expr $angle + 10`
+done

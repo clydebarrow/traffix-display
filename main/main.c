@@ -20,6 +20,7 @@
 #include "events.h"
 #include "gdltask.h"
 #include "wifi_prov.h"
+#include "preferences.h"
 /* PRIVATE STRUCTURES ---------------------------------------------------------*/
 
 /* VARIABLES -----------------------------------------------------------------*/
@@ -58,24 +59,6 @@ static void lvglFlushCb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *c
     int offsety2 = area->y2;
     // copy a buffer's content to a specific area of the display
     esp_lcd_panel_draw_bitmap(panel_handle, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);
-}
-
-// A task to call the LVGL timer periodically.
-_Noreturn static void lvglTimerTask(void *param) {
-    static uint64_t lastTime = 0;
-    for (;;) {
-        uint64_t nowTime = esp_timer_get_time();
-        uint32_t elapsed = ((nowTime - lastTime) & 0xFFFFFFFF) / 1000; // calculate elapsed ms
-        lv_tick_inc(elapsed);
-        lastTime = nowTime;
-        //ESP_LOGI(TAG, "lvgl timer elapsed=%d", elapsed);
-        uint32_t next = lv_timer_handler();
-        if (next > 50)
-            next = 50;     // don't sleep for more than this
-        else if (next < 10)
-            next = 10;
-        vTaskDelay(next / portTICK_PERIOD_MS);
-    }
 }
 
 /**
@@ -231,8 +214,6 @@ static void initGraphics() {
     lv_disp_drv_register(&disp_drv);
 
     lv_obj_clean(lv_scr_act());
-    // start the animation timer on core 1 (APP)
-    xTaskCreatePinnedToCore(lvglTimerTask, "lvgl Timer", 32768, NULL, 4, NULL, 1);
 }
 
 static int buttonGpios[] = {
@@ -251,7 +232,7 @@ static void initGpio() {
  * @return true if the button is pressed.
  */
 
-bool buttonPressed(int index) {
+bool isButtonPressed(int index) {
     return gpio_get_level(buttonGpios[index]) == 0;
 }
 
@@ -262,18 +243,22 @@ bool buttonPressed(int index) {
 
 static void mainTask(void *param) {
     ESP_LOGI(TAG, "Main task starts");
-    initNvs();
-    initLcd();
-    initGpio();
     initEvents();
-    initWiFi();
     initGraphics();
+    xTaskCreatePinnedToCore(gdlTask, "UDPRx", 4000, NULL, 4, NULL, 0);
     ESP_LOGI(TAG, "Start UI loop");
     uiLoop();
 }
 
+/**
+ * STartup task, runs on core 0.
+ */
 void app_main(void) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    xTaskCreatePinnedToCore(mainTask, "Main", 16000, NULL, 4, NULL, 1);
-    xTaskCreatePinnedToCore(gdlTask, "UDPRx", 16000, NULL, 4, NULL, 0);
+    initNvs();
+    initPrefs();
+    initLcd();
+    initGpio();
+    initWiFi();
+    xTaskCreatePinnedToCore(mainTask, "Main", 12000, NULL, 4, NULL, 1);
 }

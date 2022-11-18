@@ -45,6 +45,7 @@ typedef struct {
     void (*update)(lv_obj_t *tile);     // update the view
 
     void (*teardown)(lv_obj_t *tile);   // view is being deleted, clean up.
+    uint32_t refreshMs;                 // Update the screen this often.
 } uiScreen_t;
 
 

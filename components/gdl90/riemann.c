@@ -44,7 +44,7 @@ float greatCircleDistance(float lat1, float lon1, float lat2, float lon2) {
  */
 
 float northing(float lat1, float lat2) {
-    return sinf(toRadians(lat1 - lat2)) * EARTH_RADIUS;
+    return sinf(toRadians(lat2 - lat1)) * EARTH_RADIUS;
 }
 
 /**

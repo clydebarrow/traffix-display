@@ -4,6 +4,8 @@
 
 /* INCLUDES ------------------------------------------------------------------*/
 
+#include "esp_timer.h"
+
 /* MACROS --------------------------------------------------------------------*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,8 +69,9 @@
 
 /* FUNCTIONS DECLARATION -----------------------------------------------------*/
 
-extern bool buttonPressed(int index);
+extern bool isButtonPressed(int index);
 extern void setBacklightState(bool on);
+inline uint32_t getNow() { return (uint32_t) (esp_timer_get_time() / 1000); }
 
 
 #endif /* MAIN_H_ */

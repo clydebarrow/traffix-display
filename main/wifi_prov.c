@@ -16,6 +16,7 @@
 #include "ui.h"
 #include "wifi_prov.h"
 #include "events.h"
+#include "status.h"
 
 static const char *TAG = "WiFi";
 
@@ -208,6 +209,7 @@ static void qrShow(lv_obj_t *tv) {
  * @param tv 
  */
 static void connectShow(lv_obj_t *tv) {
+    statusInit();
     connectLabel = lv_label_create(tv);
     initStyle();
     lv_obj_align(connectLabel, LV_ALIGN_LEFT_MID, 0, 0);

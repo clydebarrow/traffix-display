@@ -6,6 +6,7 @@
 #include <riemann.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <math.h>
 #include "tests.h"
 
 static bool testGreatCircleDistance() {
@@ -25,12 +26,27 @@ static bool testGreatCircleDistance() {
     return passed;
 }
 
+static bool testEastingNorthing() {
+    bool passed = true;
+    float value = easting(0.0f, 0.0f, 0.0f, 1.0f);
+    passed &= assertFloatEquals(111189.f, value, 1.f);
+    value = northing(0.0f, 1.0f);
+    passed &= assertFloatEquals(111189.f, value, 1.f);
+    value = easting(50.0f, 0.0f, 30.0f, 1.0f);
+    passed &= assertFloatEquals(85176.f, value, 1.f);
+    value = easting(50.0f, 2.0f, 30.0f, 1.0f);
+    passed &= assertFloatEquals(-85176.f, value, 1.f);
+    return passed;
+
+}
+
 static struct {
     const char *name;
 
     bool (*func)(void);
 } testlist[] = {
-        {"Great Circles", testGreatCircleDistance}
+        {"Great Circles", testGreatCircleDistance},
+        {"Easting and Northing", testEastingNorthing}
 };
 
 int main() {
@@ -48,6 +64,6 @@ int main() {
         fprintf(stderr, "\033[32mAll %d tests passed\033[0m\n", idx);
         exit(0);
     }
-    fprintf(stderr, "\033[32mPassed: %d\n\033[31mFailed: %d\033[0m\n", passed, idx-passed);
+    fprintf(stderr, "\033[32mPassed: %d\n\033[31mFailed: %d\033[0m\n", passed, idx - passed);
     exit(1);
 }

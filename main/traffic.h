@@ -19,13 +19,12 @@
 typedef struct {
     gdl90PositionReport_t report;
     float distance;       // calculated distance from us
-    uint32_t timestamp;   // when report last updated.
+    uint32_t timestampMs;   // when report last updated in ms
     bool    active;
 } traffic_t;
 
 extern void processTraffic(const gdl90PositionReport_t * report);
 extern void showTraffic();
 extern traffic_t traffic[MAX_TRAFFIC_TRACKED];
-extern void trafficUpdateActive();
 
 #endif //TRAFFIX_DISPLAY_TRAFFIC_H

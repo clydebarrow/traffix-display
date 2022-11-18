@@ -95,39 +95,32 @@ static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t new
  * This function manages the different ui screens
  */
 _Noreturn void uiLoop() {
-    gdlDataPacket_t packet;
-    gdl90Data_t data;
 
     esp_event_handler_register_with(loopHandle, UI_EVENT_BASE, ESP_EVENT_ANY_ID, uiEventHandler, NULL);
     setUiState(UI_STATE_INIT);      // perform initialisation
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(10 / portTICK_PERIOD_MS);   // short delay for backlight
     setUiState(UI_STATE_SPLASH);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-    postMessage(EVENT_WIFI_CHANGE, NULL, 0);
     esp_task_wdt_add(NULL);
-    uint64_t lastus = 0;
+    uint64_t lastTimeUs = 0;
+    uint64_t nextUpdateUs = 0;
+    ESP_LOGI(TAG, "uiLoop starting loop");
     for (;;) {
-        if (getNextBlock(&packet, 250)) {
-            if(packet.err != GDL90_ERR_NONE) {
-                ESP_LOGI(TAG, "DecodeBlock failed - %s: id %d, len %d",
-                         gdl90ErrorMessage(packet.err), packet.data[0], packet.len);
-            } else {
-                memset(&data, 0, sizeof(data));
-                gdl90Err_t err = gdl90DecodeBlock(packet.data, packet.len, &data);
-                if (err == GDL90_ERR_NONE) {
-                    processPacket(&data);
-                } else
-                    ESP_LOGI(TAG, "Decode packet id %d failed with err %s", data.id, gdl90ErrorMessage(err));
-            }
-        }
-        esp_task_wdt_reset();
-        uint64_t nowus = esp_timer_get_time();
-        if (nowus > lastus + 1000000) {
-            lastus = nowus;
-            statusUpdate();
-            if (currentScreen && currentScreen->update)
-                currentScreen->update(lv_scr_act());
+        uint32_t maxDelayMs = lv_timer_handler();
+        if (maxDelayMs > 50)
+            maxDelayMs = 50;     // don't sleep for more than this
+        else if (maxDelayMs < 10)
+            maxDelayMs = 10;
+        dequeueGdl90Packet(maxDelayMs);
+        uint64_t now = esp_timer_get_time();
+        if (currentScreen && currentScreen->update && now >= nextUpdateUs) {
+            currentScreen->update(lv_scr_act());
+            nextUpdateUs = now + currentScreen->refreshMs * 1000LL;
             showTraffic();
+            statusUpdate();
         }
+        uint32_t elapsedMs = ((now - lastTimeUs) & 0xFFFFFFFF) / 1000;
+        lastTimeUs = now;
+        esp_task_wdt_reset();
+        lv_tick_inc(elapsedMs);
     }
 }
