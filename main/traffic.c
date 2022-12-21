@@ -69,6 +69,23 @@ void processTraffic(const gdl90PositionReport_t *report) {
         updateTraffic(tp, report, distance);
 }
 
+int compareTraffic(const void *tp1, const void *tp2) {
+    if (((traffic_t *) tp1)->active && !((traffic_t *) tp2)->active)
+        return -1;
+    if (((traffic_t *) tp2)->active && !((traffic_t *) tp1)->active)
+        return 1;
+    return (int) ((((traffic_t *) tp1)->distance - ((traffic_t *) tp2)->distance) * 1000.0f);
+}
+
+void sortTraffic() {
+    uint32_t oldMs = esp_timer_get_time() / 1000 - MAX_TRAFFIC_AGE_MS;
+    TARGETS_FOREACH(tp) {
+        if (tp->active && tp->timestampMs < oldMs)
+            tp->active = false;
+    }
+    qsort(traffic, ARRAY_SIZE(traffic), sizeof(traffic_t), compareTraffic);
+}
+
 void showTraffic() {
     uint32_t oldMs = esp_timer_get_time() / 1000 - MAX_TRAFFIC_AGE_MS;
     // move cursor up and clear screen

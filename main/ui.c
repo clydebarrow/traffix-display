@@ -10,8 +10,13 @@
 #include "esp_task_wdt.h"
 #include "gdltask.h"
 #include "traffic.h"
+#include "udp.h"
+#include "wifi_prov.h"
 
 static const char *TAG = "ui";
+
+#define PING_UPDATE_MS 20000        // delay between sending UDP pings to wake up data providers
+
 
 const ESP_EVENT_DEFINE_BASE(UI_EVENT_BASE);
 
@@ -92,7 +97,7 @@ static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t new
 }
 
 /**
- * This function manages the different ui screens
+ * This task manages the different ui screens
  */
 _Noreturn void uiLoop() {
 
@@ -103,6 +108,7 @@ _Noreturn void uiLoop() {
     esp_task_wdt_add(NULL);
     uint64_t lastTimeUs = 0;
     uint64_t nextUpdateUs = 0;
+    uint64_t nextPingUs = 0;
     ESP_LOGI(TAG, "uiLoop starting loop");
     for (;;) {
         uint32_t maxDelayMs = lv_timer_handler();
@@ -118,9 +124,14 @@ _Noreturn void uiLoop() {
             showTraffic();
             statusUpdate();
         }
+        // periodically try to register with GDL90 sources
+        if(wifiState == WIFI_CONNECTED && now >= nextPingUs) {
+            nextPingUs = now + PING_UPDATE_MS * 1000LL;
+            pingUdp();
+        }
         uint32_t elapsedMs = ((now - lastTimeUs) & 0xFFFFFFFF) / 1000;
         lastTimeUs = now;
         esp_task_wdt_reset();
-        lv_tick_inc(elapsedMs);
+        lv_tick_inc(elapsedMs); // update LVGL with the current time.
     }
 }

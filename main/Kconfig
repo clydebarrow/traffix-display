@@ -14,6 +14,10 @@ menu "Target board selection"
             bool "LilyGO T-Embed"
             help
                 Select this when using the LilyGO T-Display-S3 board
+        config TRAFFIX_TARGET_NEWT
+            bool "Newt MIP display"
+            help
+                Select this when using the Phabili Newt Memory-In-Pixel board
 
     endchoice
 endmenu

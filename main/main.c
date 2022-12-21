@@ -133,6 +133,7 @@ static void initLcd(void) {
     gpio_set_direction(TRAFFIX_PIN_PWR, GPIO_MODE_OUTPUT);
 
     gpio_set_level(TRAFFIX_PIN_RD, true);
+    gpio_set_level(TRAFFIX_PIN_PWR, true);
 
     ESP_LOGI(TAG, "Initialize Intel 8080 bus");
     esp_lcd_i80_bus_handle_t i80_bus = NULL;

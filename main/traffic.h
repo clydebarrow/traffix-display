@@ -25,6 +25,7 @@ typedef struct {
 
 extern void processTraffic(const gdl90PositionReport_t * report);
 extern void showTraffic();
+extern void sortTraffic();      // sorts traffic, closest first
 extern traffic_t traffic[MAX_TRAFFIC_TRACKED];
 
 #endif //TRAFFIX_DISPLAY_TRAFFIC_H

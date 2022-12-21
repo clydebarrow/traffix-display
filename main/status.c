@@ -37,7 +37,7 @@ static struct {
 };
 
 
-static const char *TAG = "Status";
+#define TAG "status"
 
 static void setState(lv_obj_t *image, bool enabled) {
     if (enabled)
