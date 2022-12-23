@@ -66,6 +66,7 @@
  */
 
 #define ARRAY_SIZE(arr) ((sizeof(arr)/sizeof(arr[0])))
+#define FOREACH(array, ptr, type) for (type * ptr = (array) ; ptr != (array) + ARRAY_SIZE(array) ; ptr++)
 
 /* FUNCTIONS DECLARATION -----------------------------------------------------*/
 

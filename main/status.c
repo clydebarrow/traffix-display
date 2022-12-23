@@ -7,6 +7,7 @@
 #include "wifi_prov.h"
 #include "gdltask.h"
 #include "main.h"
+#include "ownship.h"
 
 LV_IMG_DECLARE(wifi_icon)
 LV_IMG_DECLARE(gps_icon)
@@ -32,7 +33,7 @@ static struct {
         },
         {
                 .src = &traffic_icon,
-                .enabled = isTrafficConnected
+                .enabled = isGdl90TrafficConnected
         },
 };
 

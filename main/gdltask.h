@@ -14,13 +14,4 @@ typedef enum {
 
 extern char *getGdl90StatusText();
 
-extern bool isTrafficConnected();
-
-extern bool isGpsConnected();
-
-extern void dequeueGdl90Packet(uint32_t delayMs);
-
-extern void processPacket(gdl90Data_t *packet);
-
-extern traffic_t ourPosition;
 extern gdl90Heartbeat_t lastHeartbeat;

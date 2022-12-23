@@ -18,5 +18,6 @@ enum {
 
 extern void initEvents();
 extern int postMessage(int32_t id, void * data, size_t len);
+extern void dispatchEvents(uint32_t delay);
 
 #endif //TRAFFIX_DISPLAY_EVENTS_H

@@ -84,18 +84,29 @@ static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t new
         return;
     }
     ESP_LOGI(TAG, "UIState changes to %s", currentScreen->name);
-    //if(uiScreens[uiState]->teardown != NULL)
-    //   uiScreens[uiState]->teardown(curTile);
+    printf("heap free, = %d smallest  = %d\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
     uiState = newState;
     lv_obj_t *curTile = lv_obj_create(NULL);
     lv_obj_add_style(curTile, &bgStyle, 0);
     currentScreen->setup(curTile);
+    ESP_LOGI(TAG, "setup complete for %s", currentScreen->name);
     lv_obj_add_event_cb(curTile, tileDeleteCb, LV_EVENT_DELETE, (void *) currentScreen);
     // show the new tile
     lv_scr_load_anim(curTile, LV_SCR_LOAD_ANIM_FADE_IN, 400, 0, true);
     setBacklightState(true);
 }
 
+void showStats() {
+    TaskStatus_t tasks[30];
+    uint32_t runTime;
+    size_t count = uxTaskGetSystemState(tasks, ARRAY_SIZE(tasks), &runTime);
+    for (size_t i = 0; i != count; i++) {
+        TaskStatus_t *tp = tasks + i;
+        if (strcmp(tp->pcTaskName, "IDLE") == 0)
+            printf("IDLE Task usage %d%%\n", tp->ulRunTimeCounter / (runTime/100));
+        //printf("Task %s, runtime %d, stackHW %X\n", tp->pcTaskName, tp->ulRunTimeCounter, tp->usStackHighWaterMark);
+    }
+}
 /**
  * This task manages the different ui screens
  */
@@ -103,7 +114,7 @@ _Noreturn void uiLoop() {
 
     esp_event_handler_register_with(loopHandle, UI_EVENT_BASE, ESP_EVENT_ANY_ID, uiEventHandler, NULL);
     setUiState(UI_STATE_INIT);      // perform initialisation
-    vTaskDelay(10 / portTICK_PERIOD_MS);   // short delay for backlight
+    vTaskDelay(2);   // short delay for backlight
     setUiState(UI_STATE_SPLASH);
     esp_task_wdt_add(NULL);
     uint64_t lastTimeUs = 0;
@@ -114,18 +125,24 @@ _Noreturn void uiLoop() {
         uint32_t maxDelayMs = lv_timer_handler();
         if (maxDelayMs > 50)
             maxDelayMs = 50;     // don't sleep for more than this
-        else if (maxDelayMs < 10)
-            maxDelayMs = 10;
-        dequeueGdl90Packet(maxDelayMs);
+        else if (maxDelayMs < portTICK_PERIOD_MS)
+            maxDelayMs = portTICK_PERIOD_MS;
+        dispatchEvents(maxDelayMs / portTICK_PERIOD_MS);        // dispatch events for this long
         uint64_t now = esp_timer_get_time();
-        if (currentScreen && currentScreen->update && now >= nextUpdateUs) {
-            currentScreen->update(lv_scr_act());
-            nextUpdateUs = now + currentScreen->refreshMs * 1000LL;
-            showTraffic();
+        if (now >= nextUpdateUs) {
+            if (currentScreen && currentScreen->update) {
+                ESP_LOGI(TAG, "Update screen %s", currentScreen->name);
+                currentScreen->update(lv_scr_act());
+                nextUpdateUs = now + currentScreen->refreshMs * 1000LL;
+            } else {
+                nextUpdateUs = now + 1000000LL;
+            }
             statusUpdate();
+            //showTraffic();
+            //showStats();
         }
         // periodically try to register with GDL90 sources
-        if(wifiState == WIFI_CONNECTED && now >= nextPingUs) {
+        if (wifiState == WIFI_CONNECTED && now >= nextPingUs) {
             nextPingUs = now + PING_UPDATE_MS * 1000LL;
             pingUdp();
         }

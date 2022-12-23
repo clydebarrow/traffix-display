@@ -8,24 +8,31 @@
 #include "gdltask.h"
 #include "riemann.h"
 #include "main.h"
+#include "units.h"
+#include "ownship.h"
 
 LV_IMG_DECLARE(ownship)
 LV_IMG_DECLARE(north)
-// list of target files
 LV_IMG_DECLARE(target)
 
 
 #define MAX_TARGETS_SHOWN   4
 
+static const char *const TAG = "main_display";
 static float range = 40000.f;     // display range in meters. This display box will be 2*range wide and high
 static lv_coord_t height, width;
 static lv_coord_t xOffset, yOffset;
 static bool isPortrait = false;
-static lv_obj_t *targetImages[MAX_TARGETS_SHOWN];
+typedef struct {
+    lv_obj_t *image;        // target image
+    lv_obj_t *label;        // the label
+} target_t;
+target_t targets[MAX_TARGETS_SHOWN];
 static lv_obj_t *northImage;
 static lv_obj_t *rangeLabel;
 static lv_obj_t *trafficLabel;
 static lv_style_t rangeStyle;
+static lv_style_t labelStyle;
 static lv_style_t arcStyle;
 
 static float cosT, sinT;
@@ -49,13 +56,25 @@ static void mainSetup(lv_obj_t *tile) {
         yOffset = 0;
     }
     lv_obj_align(ownshipImage, LV_ALIGN_CENTER, (lv_coord_t) xOffset, (lv_coord_t) yOffset);
-    for (int idx = 0; idx != ARRAY_SIZE(targetImages); idx++) {
-        lv_obj_t *img = lv_img_create(tile);
-        targetImages[idx] = img;
-        lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_add_flag(img, LV_OBJ_FLAG_HIDDEN);
+    lv_style_init(&labelStyle);
+    lv_style_set_text_font(&labelStyle, &lv_font_montserrat_12);
+    lv_style_set_bg_color(&labelStyle, lv_color_black());
+    lv_style_set_text_color(&labelStyle, lv_color_white());
+    lv_style_set_text_align(&labelStyle, LV_TEXT_ALIGN_LEFT);
+    lv_style_set_align(&labelStyle, LV_ALIGN_LEFT_MID);
+    FOREACH(targets, tp, target_t) {
+        tp->image = lv_img_create(tile);
+        lv_obj_set_align(tp->image, LV_ALIGN_CENTER);
+        lv_obj_add_flag(tp->image, LV_OBJ_FLAG_HIDDEN);
+        tp->label = lv_label_create(tile);
+        lv_obj_add_style(tp->label, &labelStyle, 0);
+        lv_obj_set_align(tp->image, LV_ALIGN_CENTER);
+        lv_obj_add_flag(tp->label, LV_OBJ_FLAG_HIDDEN);
     }
     rangeLabel = lv_label_create(tile);
+    lv_obj_align(rangeLabel, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_style_init(&rangeStyle);
+    ESP_LOGI(TAG, "Range style inited");
     lv_style_set_text_font(&rangeStyle, &lv_font_montserrat_16);
     lv_style_set_bg_color(&rangeStyle, lv_color_black());
     lv_style_set_text_color(&rangeStyle, lv_color_white());
@@ -98,60 +117,89 @@ static void translate(lv_obj_t *obj, float deltaNorth, float deltaEast) {
     lv_coord_t x = (lv_coord_t) (deltaEast * cosT + deltaNorth * sinT + (float) xOffset);
     lv_coord_t y = (lv_coord_t) (-(int) (-deltaEast * sinT + deltaNorth * cosT) + yOffset);
     lv_obj_set_pos(obj, x, y);
-    lv_obj_align(obj, LV_ALIGN_CENTER, x, y);
 }
 
 
 static void mainUpdate() {
     char textBuf[512];
+    traffic_t traffic[MAX_TARGETS_SHOWN];
     int textLen;
     range = 1000;
-    sortTraffic();
-    // get the range of the furthest of the first 4 targets
+    ownship_t ourPosition;
+    bool posValid = getOwnshipPosition(&ourPosition);
+    getTraffic(traffic, MAX_TARGETS_SHOWN);
+    // get the range of the most distant of the first 4 targets
+    // we assume they are sorted by ascending distance
+    size_t tcnt = 0;
     for (traffic_t *ptr = traffic + MAX_TARGETS_SHOWN; ptr-- != traffic;)
         if (ptr->active) {
             range = ptr->distance;
+            tcnt = ptr - traffic + 1;
             break;
         }
     range *= 1.1f;
+    // convert to a whole number of nm or km as appropriate
+    int rangeInUnits = (int) ceilf(convertToUserUnit(range, &prefDistanceUnit));
+    range = convertFromUserUnit((float) rangeInUnits, &prefDistanceUnit);
     float scale = (float) height / range / 2;
     textLen = 0;
     textBuf[0] = 0;
-    lv_label_set_text_fmt(rangeLabel, "%dkm", (int) (range / 1000));
+    ESP_LOGI(TAG, "mainUpdate - traffic sorted, active %d, range %d", tcnt, rangeInUnits);
+    lv_label_set_text_fmt(rangeLabel, "%d%s", rangeInUnits, userUnitName(&prefDistanceUnit));
+    if (!posValid) {
+        lv_obj_add_flag(northImage, LV_OBJ_FLAG_HIDDEN);
+        for (int idx = 0; idx != MAX_TARGETS_SHOWN; idx++) {
+            lv_obj_add_flag(targets[idx].image, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(targets[idx].label, LV_OBJ_FLAG_HIDDEN);
+        }
+        ESP_LOGI(TAG, "mainUpdate - GPS disconnected");
+        return;
+    }
+    lv_obj_clear_flag(northImage, LV_OBJ_FLAG_HIDDEN);
     // precalculate rotation
     cosT = cosf(toRadians(-ourPosition.report.track));
     sinT = sinf(toRadians(-ourPosition.report.track));
     lv_img_set_angle(northImage, (int16_t) (-ourPosition.report.track * 10));
-    if (isGpsConnected())
-        lv_obj_clear_flag(northImage, LV_OBJ_FLAG_HIDDEN);
-    else
-        lv_obj_add_flag(northImage, LV_OBJ_FLAG_HIDDEN);
     translate(northImage, (float) height / 2, 0);
     for (int idx = 0; idx != MAX_TARGETS_SHOWN; idx++) {
-        lv_obj_t *ip = targetImages[idx];
-        traffic_t *tp = traffic + idx;
-        if (!tp->active) {
-            lv_obj_add_flag(ip, LV_OBJ_FLAG_HIDDEN);
+        traffic_t *trafp = traffic + idx;
+        target_t * targp = targets + idx;
+        if (!trafp->active) {
+            lv_obj_add_flag(targp->image, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(targp->label, LV_OBJ_FLAG_HIDDEN);
         } else {
-            textLen += sprintf(textBuf + textLen, "\n%.8s %.1f", tp->report.callsign, tp->distance / 1000);
-            lv_obj_clear_flag(ip, LV_OBJ_FLAG_HIDDEN);
-            int angle = (int32_t) (tp->report.track - ourPosition.report.track) % 360;
+            //printf("Process target %s, altitude %f\n", trafp->report.callsign, trafp->report.altitude);
+            lv_obj_clear_flag(targp->image, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(targp->label, LV_OBJ_FLAG_HIDDEN);
+            textLen += sprintf(textBuf + textLen, "\n%.8s %.1f", trafp->report.callsign, trafp->distance / 1000);
+            int angle = (int32_t) (trafp->report.track - ourPosition.report.track) % 360;
             if (angle < 0)
                 angle += 360;
-            lv_img_set_angle(ip, (int16_t) (angle * 10));
-            //lv_img_set_src(ip, targetList[angle]);
-            //lv_obj_set_local_style_prop(ip, LV_STYLE_TRANSFORM_ANGLE, angle, LV_STATE_DEFAULT);
-            lv_img_set_src(ip, &target);
-            float deltaEast = (trafficEasting(&ourPosition.report, &tp->report) * scale);
-            float deltaNorth = (trafficNorthing(&ourPosition.report, &tp->report) * scale);
-            translate(ip, deltaNorth, deltaEast);
+            lv_img_set_angle(targp->image, (int16_t) (angle * 10));
+            lv_img_set_src(targp->image, &target);
+            float altDiff = convertToUserUnit(trafp->report.altitude - ourPosition.report.altitude, &prefAltitudeUnit);
+            if (prefAltitudeUnit.currentValue.intValue == ALTITUDE_FEET)
+                altDiff /= 100;
+            else
+                altDiff /= 10;
+            const char *callsign = trafp->report.callsign;
+            //printf("Process target %s, altDiff %f\n", callsign, altDiff);
+            //lv_label_set_text(targp->label, callsign);
+            char buffer[40];
+            snprintf(buffer, sizeof buffer,  "%+04.0f\n%.3s", altDiff, callsign);
+            lv_label_set_text(targp->label, buffer);
+            float deltaEast = (trafficEasting(&ourPosition.report, &trafp->report) * scale);
+            float deltaNorth = (trafficNorthing(&ourPosition.report, &trafp->report) * scale);
+            translate(targp->image, deltaNorth, deltaEast);
+            lv_obj_align_to(targp->label, targp->image, LV_ALIGN_LEFT_MID, target.header.w, 0);
         }
     }
     lv_label_set_text(trafficLabel, textBuf);
 }
 
 static void mainTeardown() {
-    memset(targetImages, 0, sizeof(targetImages));
+    // objects will be deleted, so remove references to them
+    memset(targets, 0, sizeof(targets));
 }
 
 const uiScreen_t uiMain = {

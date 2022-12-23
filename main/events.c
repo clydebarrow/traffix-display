@@ -63,11 +63,7 @@ static void eventHandler(void *handler_arg, esp_event_base_t base, int32_t event
  */
 void initEvents() {
     esp_event_loop_args_t loopArgs = {
-            .queue_size = 20,
-            .task_name = "UIEvents",
-            .task_priority = 2,
-            .task_core_id = APP_CPU_NUM,
-            .task_stack_size = 16000
+            .queue_size = 10,
     };
     esp_event_loop_create(&loopArgs, &loopHandle);
     esp_event_handler_register_with(loopHandle, EVENT_BASE, ESP_EVENT_ANY_ID, eventHandler, NULL);
@@ -75,4 +71,8 @@ void initEvents() {
 
 int postMessage(int32_t id, void *data, size_t len) {
     return esp_event_post_to(loopHandle, EVENT_BASE, id, data, len, 0);
+}
+
+void dispatchEvents(uint32_t delay) {
+    esp_event_loop_run(loopHandle, delay);
 }

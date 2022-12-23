@@ -155,4 +155,5 @@ extern float trafficNorthing(const gdl90PositionReport_t *p1, const gdl90Positio
 
 extern float trafficEasting(const gdl90PositionReport_t *p1, const gdl90PositionReport_t *p2);
 
+extern bool isGdl90TrafficConnected();
 #endif //TRAFFIX_DISPLAY_GDL90_H

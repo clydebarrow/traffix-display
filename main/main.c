@@ -21,6 +21,7 @@
 #include "gdltask.h"
 #include "wifi_prov.h"
 #include "preferences.h"
+#include "ownship.h"
 /* PRIVATE STRUCTURES ---------------------------------------------------------*/
 
 /* VARIABLES -----------------------------------------------------------------*/
@@ -246,6 +247,8 @@ static void mainTask(void *param) {
     ESP_LOGI(TAG, "Main task starts");
     initEvents();
     initGraphics();
+    initTraffic();
+    initOwnship();
     xTaskCreatePinnedToCore(gdlTask, "UDPRx", 4000, NULL, 4, NULL, 0);
     ESP_LOGI(TAG, "Start UI loop");
     uiLoop();

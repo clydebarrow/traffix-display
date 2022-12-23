@@ -11,7 +11,7 @@
 
 #define MAX_TRAFFIC_TRACKED 20      // maximum number of aircraft to track
 #define MAX_TRAFFIC_AGE_MS  10000   // max traffic age in ms
-#define TARGETS_FOREACH(ptr)  for(traffic_t * ptr = traffic ; ptr != traffic + MAX_TRAFFIC_TRACKED ; ptr++)
+#define TARGETS_FOREACH(ptr)  FOREACH(traffic, ptr, traffic_t)
 
 /**
  * Store traffic information
@@ -24,8 +24,8 @@ typedef struct {
 } traffic_t;
 
 extern void processTraffic(const gdl90PositionReport_t * report);
+extern void initTraffic();
 extern void showTraffic();
-extern void sortTraffic();      // sorts traffic, closest first
-extern traffic_t traffic[MAX_TRAFFIC_TRACKED];
+extern void getTraffic(traffic_t * buffer, size_t cnt);      // get the nearest cnt traffic objects
 
 #endif //TRAFFIX_DISPLAY_TRAFFIC_H
