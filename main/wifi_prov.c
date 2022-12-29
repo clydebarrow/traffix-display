@@ -12,7 +12,7 @@
 #include <esp_log.h>
 #include <string.h>
 #include <lvgl.h>
-#include "main.h"
+#include <lwip/sockets.h>
 #include "ui.h"
 #include "wifi_prov.h"
 #include "events.h"
@@ -21,6 +21,7 @@
 static const char *TAG = "WiFi";
 
 wifiState_t wifiState;
+in_addr_t broadcastAddr;
 
 static lv_obj_t *qrCodeImage;
 static lv_obj_t *provLabel;
@@ -72,6 +73,10 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
         wifiState = WIFI_CONNECTED;
+        tcpip_adapter_ip_info_t ipInfo;
+        tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ipInfo);
+        broadcastAddr = ipInfo.ip.addr | ~ipInfo.netmask.addr;
+        ESP_LOGI(TAG, "addr = %x, mask=%x, broadcast=%x\n", ipInfo.ip.addr, ipInfo.netmask.addr, broadcastAddr);
         postMessage(EVENT_WIFI_CHANGE, NULL, 0);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
@@ -183,6 +188,7 @@ static void initStyle() {
     lv_style_set_text_color(&titleStyle, lv_color_white());
     lv_style_set_text_align(&titleStyle, LV_TEXT_ALIGN_CENTER);
 }
+
 /**
  * Show a QR code for provisioning
  * @param tv    The graphics context to show on
@@ -196,7 +202,7 @@ static void qrShow(lv_obj_t *tv) {
     lv_qrcode_update(qrCodeImage, payload, strlen(payload));
     initStyle();
     provLabel = lv_label_create(tv);
-    lv_obj_add_style(provLabel,&titleStyle, 0);
+    lv_obj_add_style(provLabel, &titleStyle, 0);
     lv_obj_set_style_border_color(provLabel, lv_color_black(), 0);
     lv_obj_set_style_border_width(provLabel, 2, 0);
     lv_obj_align(provLabel, LV_ALIGN_RIGHT_MID, 0, 0);
@@ -218,7 +224,7 @@ static void connectShow(lv_obj_t *tv) {
     wifi_config_t wifi_cfg;
     esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg);
     lv_label_set_text_fmt(connectLabel, "Connecting to WiFi\nSSID: %.32s", wifi_cfg.sta.ssid);
-    lv_obj_t * spinner = lv_spinner_create(tv, 1000, 60);
+    lv_obj_t *spinner = lv_spinner_create(tv, 1000, 60);
     lv_obj_set_size(spinner, 60, 60);
     lv_obj_align(spinner, LV_ALIGN_RIGHT_MID, -4, 0);
     lv_style_init(&arcStyle);
