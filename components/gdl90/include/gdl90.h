@@ -5,6 +5,8 @@
 #ifndef TRAFFIX_DISPLAY_GDL90_H
 #define TRAFFIX_DISPLAY_GDL90_H
 
+#include <lwip/inet.h>
+
 #define GDL_MAX_BLOCK_SIZE  50
 #define GDL_CALLSIGN_LENGTH 8       // max 8 chars in callsign
 typedef enum {
@@ -112,7 +114,7 @@ typedef struct {
     float verticalSpeed;
     uint8_t priorityCode;
     uint8_t nic;
-    uint8_t nacP;
+    uint8_t NACp;
     bool isInFlight;
     bool isExtrapolated;
     bool isHeading;
@@ -145,7 +147,7 @@ typedef struct {
 } gdlDataPacket_t;
 
 
-extern void gdl90GetBlocks(uint8_t *buffer, size_t len, void (*blockCb)(const gdlDataPacket_t *));
+extern void gdl90GetBlocks(uint8_t *buffer, size_t len, void (*blockCb)(const gdlDataPacket_t *, struct in_addr *pAddr), struct in_addr *srcAddr);
 
 extern gdl90Err_t gdl90DecodeBlock(const uint8_t *block, uint32_t len, gdl90Data_t *out);
 

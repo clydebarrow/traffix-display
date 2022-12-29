@@ -7,6 +7,7 @@
 #include "preferences.h"
 #include "units.h"
 #include "main.h"
+#include "flarm.h"
 
 #define PREF_NAMESPACE  "pref"
 
@@ -46,6 +47,8 @@ preference_t *const preferences[] = {
         &prefRangeH,
         &prefRangeV,
         &prefTrafficTimeout,
+        &prefFlarmBaudRate,
+        &prefUDPPort,
 };
 
 static nvs_handle_t prefHandle;

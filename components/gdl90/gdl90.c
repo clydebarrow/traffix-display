@@ -17,7 +17,7 @@
 #define LOG_MESSAGE(a, ...) fprintf(stderr, a, __VA_ARGS__)
 #endif
 
-static uint16_t crcTable[] = {
+static const uint16_t crcTable[] = {
         0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,
         0x8108, 0x9129, 0xA14A, 0xB16B, 0xC18C, 0xD1AD, 0xE1CE, 0xF1EF,
         0x1231, 0x0210, 0x3273, 0x2252, 0x52B5, 0x4294, 0x72F7, 0x62D6,
@@ -97,6 +97,7 @@ float trafficDistance(const gdl90PositionReport_t *p1, const gdl90PositionReport
 float trafficEasting(const gdl90PositionReport_t *p1, const gdl90PositionReport_t *p2) {
     return easting(p1->latitude, p1->longitude, p2->latitude, p2->longitude);
 }
+
 float trafficNorthing(const gdl90PositionReport_t *p1, const gdl90PositionReport_t *p2) {
     return northing(p1->latitude, p2->latitude);
 }
@@ -161,7 +162,7 @@ static gdl90Err_t decodePosition(const uint8_t *buffer, gdl90Data_t *out) {
     out->positionReport.isExtrapolated = FLAGSET(byte, 2);
     out->positionReport.isHeading = FLAGSET(byte, 1);
     out->positionReport.nic = buffer[13] >> 4;
-    out->positionReport.nacP = buffer[13] & 0xFF;
+    out->positionReport.NACp = buffer[13] & 0xF;
     // convert speed in knots to m/s
     out->positionReport.groundSpeed = ((float) ((buffer[14] << 4) + (buffer[15] >> 4))) * 1852.0f / 3600;
     uint16_t vs = buffer[16] + ((buffer[15] & 0xF) << 8);
@@ -217,7 +218,8 @@ static struct {
  * @param blockCb A callback which will receive the extracted packets.
 */
 
-void gdl90GetBlocks(uint8_t *buffer, size_t len, void (*blockCb)(const gdlDataPacket_t *)) {
+void gdl90GetBlocks(uint8_t *buffer, size_t len, void (*blockCb)(const gdlDataPacket_t *, struct in_addr *),
+                    struct in_addr *srcAddr) {
     bool controlSeen = false;
     gdlDataPacket_t packet;
     packet.len = 0;
@@ -248,7 +250,7 @@ void gdl90GetBlocks(uint8_t *buffer, size_t len, void (*blockCb)(const gdlDataPa
             memcpy(packet.data, blockStart, blockLen);
             if (getLittleWord(blockEnd - 2) != gdl90Crc(blockStart, blockLen)) {
                 packet.err = GDL90_ERR_BADCRC;
-                blockCb(&packet);
+                blockCb(&packet, srcAddr);
                 continue;
             }
 
@@ -258,13 +260,13 @@ void gdl90GetBlocks(uint8_t *buffer, size_t len, void (*blockCb)(const gdlDataPa
                 if (decodeTable[i].id == id && blockLen == decodeTable[i].len) {
                     found = true;
                     packet.err = GDL90_ERR_NONE;
-                    blockCb(&packet);
+                    blockCb(&packet, srcAddr);
                     break;
                 }
             }
             if (!found) {
                 packet.err = GDL90_ERR_UNKNOWN_ID;
-                blockCb(&packet);
+                blockCb(&packet, srcAddr);
             }
         } else {
             if (!controlSeen)
@@ -281,7 +283,7 @@ void gdl90GetBlocks(uint8_t *buffer, size_t len, void (*blockCb)(const gdlDataPa
     }
     if (controlSeen) {
         packet.err = GDL90_ERR_MISSINGEND;
-        blockCb(&packet);
+        blockCb(&packet, srcAddr);
     }
 }
 

@@ -14,11 +14,35 @@ typedef struct {
     uint32_t timestampMs;   // when report last updated in ms
 } ownship_t;
 
+typedef enum {
+    GPS_FIX_NONE = 1,
+    GPS_FIX_2D,
+    GPS_FIX_3D,
+} gpsFix_t;
+
+typedef struct {
+    gpsFix_t gpsFix;
+    float baroAltitude;
+    float geoAltitude;
+    int satellitesUsed;
+    int NACp;
+} gpsStatus_t;
+
 
 extern bool isGpsConnected();
 
-extern void setOwnshipPosition(gdl90PositionReport_t * position, bool valid);
-extern bool getOwnshipPosition(ownship_t * position);
+extern void setOwnshipPosition(gdl90PositionReport_t *position);
+
+extern bool getOwnshipPosition(ownship_t *position);
+
+extern void setHeartbeat(gdl90Heartbeat_t *heartbeat);
+
+extern bool getHeartbeat(gdl90Heartbeat_t *heartbeat);
+
+extern void setStatus(gpsStatus_t *status);
+
+extern bool getStatus(gpsStatus_t *status);
+
 extern void initOwnship();
 
 #endif //TRAFFIX_DISPLAY_OWNSHIP_H

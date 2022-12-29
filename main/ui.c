@@ -84,7 +84,6 @@ static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t new
         return;
     }
     ESP_LOGI(TAG, "UIState changes to %s", currentScreen->name);
-    printf("heap free, = %d smallest  = %d\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
     uiState = newState;
     lv_obj_t *curTile = lv_obj_create(NULL);
     lv_obj_add_style(curTile, &bgStyle, 0);
@@ -97,15 +96,16 @@ static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t new
 }
 
 void showStats() {
+    printf("heap free, = %d smallest  = %d\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
+    /*
     TaskStatus_t tasks[30];
     uint32_t runTime;
     size_t count = uxTaskGetSystemState(tasks, ARRAY_SIZE(tasks), &runTime);
     for (size_t i = 0; i != count; i++) {
         TaskStatus_t *tp = tasks + i;
-        if (strcmp(tp->pcTaskName, "IDLE") == 0)
-            printf("IDLE Task usage %d%%\n", tp->ulRunTimeCounter / (runTime/100));
-        //printf("Task %s, runtime %d, stackHW %X\n", tp->pcTaskName, tp->ulRunTimeCounter, tp->usStackHighWaterMark);
-    }
+        uint32_t percent = tp->ulRunTimeCounter / (runTime/100);
+        printf("Task %s, runtime %d%%, stackHW %d\n", tp->pcTaskName, percent, tp->usStackHighWaterMark);
+    } */
 }
 /**
  * This task manages the different ui screens
@@ -139,10 +139,10 @@ _Noreturn void uiLoop() {
             }
             statusUpdate();
             //showTraffic();
-            //showStats();
+            showStats();
         }
         // periodically try to register with GDL90 sources
-        if (wifiState == WIFI_CONNECTED && now >= nextPingUs) {
+        if (isWifiConnected() && now >= nextPingUs) {
             nextPingUs = now + PING_UPDATE_MS * 1000LL;
             pingUdp();
         }

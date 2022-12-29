@@ -1,12 +1,7 @@
 /* INCLUDES ------------------------------------------------------------------*/
-#include <esp_types.h>
 #include <sys/cdefs.h>
 #include <nvs_flash.h>
 #include <esp_event.h>
-#include <driver/spi_common.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_timer.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_lcd_panel_vendor.h"
 #include "esp_lcd_panel_ops.h"
@@ -22,6 +17,7 @@
 #include "wifi_prov.h"
 #include "preferences.h"
 #include "ownship.h"
+#include "flarm.h"
 /* PRIVATE STRUCTURES ---------------------------------------------------------*/
 
 /* VARIABLES -----------------------------------------------------------------*/
@@ -249,7 +245,8 @@ static void mainTask(void *param) {
     initGraphics();
     initTraffic();
     initOwnship();
-    xTaskCreatePinnedToCore(gdlTask, "UDPRx", 4000, NULL, 4, NULL, 0);
+    gdlInit();
+    flarmInit();
     ESP_LOGI(TAG, "Start UI loop");
     uiLoop();
 }

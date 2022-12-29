@@ -3,7 +3,7 @@
 #include "traffic.h"
 
 
-extern void gdlTask(void *);
+extern void gdlInit();
 
 typedef enum {
     GDL90_STATE_UNKNOWN,
@@ -13,5 +13,3 @@ typedef enum {
 } gdl90Status_t;
 
 extern char *getGdl90StatusText();
-
-extern gdl90Heartbeat_t lastHeartbeat;
