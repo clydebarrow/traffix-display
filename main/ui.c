@@ -59,9 +59,9 @@ static void tileDeleteCb(lv_event_t *event) {
  * Process UI state changes
  */
 
-static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t newState, void *event_data) {
+static void uiEventHandler(void *handler_arg, esp_event_base_t base, long newState, void *event_data) {
     if (newState >= ARRAY_SIZE(uiScreens)) {
-        ESP_LOGI(TAG, "Request for unknown UI state %d", newState);
+        ESP_LOGI(TAG, "Request for unknown UI state %ld", newState);
         return;
     }
     currentScreen = uiScreens[newState];
@@ -96,7 +96,7 @@ static void uiEventHandler(void *handler_arg, esp_event_base_t base, int32_t new
 }
 
 void showStats() {
-    printf("heap free, = %d smallest  = %d\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
+    printf("heap free, = %ld smallest  = %ld\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
     /*
     TaskStatus_t tasks[30];
     uint32_t runTime;

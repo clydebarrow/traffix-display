@@ -10,6 +10,7 @@
 #include "gdl90.h"
 
 #define MAX_TRAFFIC_TRACKED 20      // maximum number of aircraft to track
+#define MAX_TARGETS_SHOWN   4       // max number to show
 #define MAX_TRAFFIC_AGE_MS  10000   // max traffic age in ms
 #define TARGETS_FOREACH(ptr)  FOREACH(traffic, ptr, traffic_t)
 

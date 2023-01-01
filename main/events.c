@@ -2,7 +2,6 @@
 // Created by Clyde Stubbs on 26/10/2022.
 //
 
-#include <esp_event.h>
 #include "events.h"
 #include "ui.h"
 #include "wifi_prov.h"
@@ -52,7 +51,7 @@ static void eventHandler(void *handler_arg, esp_event_base_t base, int32_t event
         case EVENT_GDL90_CHANGE:
             break;
         default:
-            ESP_LOGI(TAG, "Event %d received", eventId);
+            ESP_LOGI(TAG, "Event %ld received", eventId);
             break;
     }
     statusUpdate();

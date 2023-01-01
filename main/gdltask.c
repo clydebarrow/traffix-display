@@ -3,7 +3,7 @@
 #include <sys/socket.h>
 #include <esp_log.h>
 #include <esp_websocket_client.h>
-#include <cJSON.h>
+#include "cJSON.h"
 #include "gdltask.h"
 #include "preferences.h"
 #include "events.h"
@@ -25,49 +25,65 @@ static uint32_t lastTrafficMs;
 static bool websocketOpen;
 static esp_websocket_client_handle_t clientHandle;
 
+static int utcFromGpsTime(char * buf, size_t len, time_t gpsTime) {
+    gpsTime += 315964800 + 18;
+    struct tm ts;
+    ts = *gmtime(&gpsTime);
+    strftime(buf, len, "%a %Y-%m-%d %H:%M:%S %Z", &ts);
+    return strlen(buf);
+}
+
 static void rxJson(const char *data, size_t len) {
     cJSON *root = cJSON_ParseWithLength(data, len);
+    gpsStatus_t status;
+    cJSON *value;
+    cJSON * sub;
 
     if (root == NULL)
         return;
-    cJSON *statusItem = cJSON_GetObjectItem(root, "status");
-    if (statusItem == NULL) {
-        cJSON_Delete(statusItem);
-        return;
+    memset(&status, 0, sizeof status);
+    value = cJSON_GetObjectItem(root, "batteryCapacity_%");
+    if (value != NULL)
+        status.batteryPercent = value->valueint;
+    sub = cJSON_GetObjectItem(root, "host");
+    if (value != NULL) {
+        cJSON * gps;
+        gps = cJSON_GetObjectItem(sub, "gps");
+        if(gps != NULL) {
+            value = cJSON_GetObjectItem(gps, "positionAccuracy_mm");
+            if (value != NULL)
+                status.accuracyH = value->valueint / 1000.0f;
+            value = cJSON_GetObjectItem(gps, "verticalAccuracy_mm");
+            if (value != NULL)
+                status.accuracyV = value->valueint / 1000.0f;
+            value = cJSON_GetObjectItem(gps, "fixType");
+            if (value != NULL)
+                status.gpsFix = value->valueint;
+            value = cJSON_GetObjectItem(gps, "gnssAlt");
+            if (value != NULL)
+                status.geoAltitude = value->valueint / 1000.0f;
+            value = cJSON_GetObjectItem(gps, "numSats");
+            if (value != NULL)
+                status.satellitesUsed = value->valueint;
+            value = cJSON_GetObjectItem(gps, "UTCTime");
+            if (value != NULL)
+                status.gpsTime = value->valueint;
+        }
     }
-    /*
-     {
-  "clientCount": 1,
-  "status": {
-    "icaoAddress": 8142385,
-    "callsign": "MKJ",
-    "latitude": -314210048,
-    "longitude": 1527573248,
-    "baroAltitude": -56028,
-    "gnssAltitude": 43350,
-    "gpsFix": 3,
-    "gpsSatellites": 6,
-    "NACp": 8,
-    "NIC": 6
-  }
-}
-     */
-    gpsStatus_t status;
-    cJSON *value;
-
-    value = cJSON_GetObjectItem(statusItem, "gpsFix");
-    status.gpsFix = value != NULL && cJSON_IsNumber(value) ? value->valueint : GPS_FIX_NONE;
-    value = cJSON_GetObjectItem(statusItem, "gpsSatellites");
-    status.satellitesUsed = value != NULL && cJSON_IsNumber(value) ? value->valueint : 0;
-    value = cJSON_GetObjectItem(statusItem, "baroAltitude");
-    status.baroAltitude = value != NULL && cJSON_IsNumber(value) ? value->valueint / 1000.0f : 0.0f;
-    value = cJSON_GetObjectItem(statusItem, "gnssAltitude");
-    status.geoAltitude = value != NULL && cJSON_IsNumber(value) ? value->valueint / 1000.0f : 0.0f;
-    value = cJSON_GetObjectItem(statusItem, "NACp");
-    status.NACp = value != NULL && cJSON_IsNumber(value) ? value->valueint : 0;
+    sub = cJSON_GetObjectItem(root, "sensor");
+    if (value != NULL) {
+        cJSON *baro;
+        baro = cJSON_GetObjectItem(sub, "baro");
+        if (value != NULL) {
+            value = cJSON_GetObjectItem(baro, "altitude_m");
+            status.baroAltitude = value->valueint;
+        }
+    }
     cJSON_Delete(root);
-    printf("Satellites: %d, gpsFix: %d, baroAltitude: %f, geoAltitude: %f, NACp: %d\n",
-           status.satellitesUsed, status.gpsFix, status.baroAltitude, status.geoAltitude, status.NACp);
+    char buf[80];
+    utcFromGpsTime(buf, sizeof buf, status.gpsTime);
+    printf("Satellites: %d, gpsFix: %d, baroAltitude: %f, geoAltitude: %f, Time: %s\n",
+           status.satellitesUsed, status.gpsFix, status.baroAltitude, status.geoAltitude, buf);
     setStatus(&status);
 }
 
@@ -106,7 +122,10 @@ static void openWebsocket(struct in_addr *srcAddr, int port) {
     char addr[40];
     char url[128];
     inet_ntop(AF_INET, srcAddr, addr, sizeof(addr));
-    snprintf(url, sizeof url, "ws://%s:%d", addr, port);
+    if (port == 80)
+        snprintf(url, sizeof url, "ws://%s/stats", addr);
+    else
+        snprintf(url, sizeof url, "ws://%s:%d/stats", addr, port);
     const esp_websocket_client_config_t ws_cfg = {
             .uri = url
     };

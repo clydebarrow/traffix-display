@@ -61,24 +61,6 @@ int checksum() {
     return true;
 }
 
-/**
- * GPGGA generation
- */
-
-/*
-         return "GPGGA,%02d%02d%02d,%02d%05.2f,%c,%02d%05.2f,%c,%d,%02d,%.1f,%.1f,M,,M,,".format(
-            stamp.get(ChronoField.HOUR_OF_DAY),
-            stamp.get(ChronoField.MINUTE_OF_HOUR),
-            stamp.get(ChronoField.SECOND_OF_MINUTE),
-            latDeg, (absLat - latDeg) * 60, if (location.latitude < 0) 'S' else 'N',
-            lonDeg, (absLon - lonDeg) * 60, if (location.longitude > 0) 'E' else 'W',
-            if (location.gpsFix >= GpsFix.ThreeD) 1 else 0,
-            location.satellitesUsed,
-            location.accuracyH / 5.0,       // estimate HDOP
-            location.altitude,
-
- */
-
 static int accuracyMap[] = {
         -1,
         18520,
@@ -101,7 +83,18 @@ static int getAccuracy(int nacP) {
     return accuracyMap[nacP];
 }
 
-bool gpgga() {
+void sendData() {
+    checksum();
+    struct sockaddr_in sendAddr;
+    sendAddr.sin_addr.s_addr = broadcastAddr;
+    sendAddr.sin_family = AF_INET;
+    sendAddr.sin_port = htons(prefUDPPort.currentValue.intValue);
+    ESP_LOGI(TAG, "FLARM data: %s", nmeabuf);
+    uart_write_bytes(FLARM_UART, nmeabuf, strlen(nmeabuf));
+    sendto(sock, nmeabuf, strlen(nmeabuf), 0, (struct sockaddr *) &sendAddr, sizeof(sendAddr));
+}
+
+void gpgga() {
     gdl90Heartbeat_t heartbeat;
     gpsStatus_t status;
     ownship_t ownship;
@@ -113,7 +106,7 @@ bool gpgga() {
     int lonDeg = (int) absLon;
 
     snprintf(nmeabuf, sizeof nmeabuf,
-             "$GPGGA,%02d%02d%02d,%02d%05.2f,%c,%02d%05.2f,%c,%d,%02d,%d,%3.1f,M,%3.1f,M,,",
+             "$GPGGA,%02lu%02lu%02lu,%02d%05.2f,%c,%02d%05.2f,%c,%d,%02d,%d,%3.1f,M,%3.1f,M,,",
              heartbeat.timeStamp / 3600,
              (heartbeat.timeStamp / 60) % 60,
              heartbeat.timeStamp % 60,
@@ -129,35 +122,10 @@ bool gpgga() {
              ownship.report.altitude,
              status.geoAltitude
     );
-    return true;
+    sendData();
 }
 
 void gprmc() {
-    /*
-     *     private fun gprmc(location: Location): String {
-        val absLat = abs(location.latitude)
-        val latDeg = absLat.toInt()
-        val absLon = abs(location.longitude)
-        val lonDeg = absLon.toInt()
-        val variation = location.magneticVariation
-        val absVar = abs(variation)
-        val stamp = location.timestamp.atOffset(ZoneOffset.UTC)
-        return "GPRMC,%02d%02d%02d,%c,%02d%05.2f,%c,%03d%05.2f,%c,%05.1f,%05.1f,%02d%02d%02d,%05.1f,%c".format(
-            stamp.get(ChronoField.HOUR_OF_DAY),
-            stamp.get(ChronoField.MINUTE_OF_HOUR),
-            stamp.get(ChronoField.SECOND_OF_MINUTE),
-            if (location.valid) 'A' else 'V',
-            latDeg, (absLat - latDeg) * 60, if (location.latitude < 0) 'S' else 'N',
-            lonDeg, (absLon - lonDeg) * 60, if (location.longitude > 0) 'E' else 'W',
-            location.speed,
-            location.track,
-            stamp.get(ChronoField.DAY_OF_MONTH),
-            stamp.get(ChronoField.MONTH_OF_YEAR),
-            stamp.get(ChronoField.YEAR) % 100,
-            absVar, if (variation > 0) 'E' else 'W'
-        ).checkSummed()
-
-     */
     gdl90Heartbeat_t heartbeat;
     gpsStatus_t status;
     ownship_t ownship;
@@ -167,41 +135,67 @@ void gprmc() {
     int latDeg = (int) absLat;
     float absLon = fabsf(ownship.report.longitude);
     int lonDeg = (int) absLon;
+    struct tm ts;
+    time_t utc = status.gpsTime + (315964800 + 18);
+    ts = *gmtime(&utc);
     snprintf(nmeabuf, sizeof nmeabuf,
-    "GPRMC,%02d%02d%02d,%c,%02d%05.2f,%c,%03d%05.2f,%c,%05.1f,%05.1f,%02d%02d%02d,%05.1f,%c".format(
-            heartbeat.timeStamp / 3600,
-            (heartbeat.timeStamp / 60) % 60,
-            heartbeat.timeStamp % 60,
-            valid? 'A' : 'V',
-            latDeg,
-            (absLat - latDeg) * 60,
-            ownship.report.latitude < 0 ? 'S' : 'N',
-            lonDeg,
-            (absLon - lonDeg) * 60,
-            ownship.report.longitude < 0 ? 'W' : 'E',
-                ownship.report.groundSpeed,
-                ownship.report.track,
-                stamp.get(ChronoField.DAY_OF_MONTH),
-                stamp.get(ChronoField.MONTH_OF_YEAR),
-                stamp.get(ChronoField.YEAR) % 100,
-                absVar, if (variation > 0) 'E' else 'W'
-
+             "$GPRMC,%02lu%02lu%02lu,%c,%02d%05.2f,%c,%03d%05.2f,%c,%05.1f,%05.1f,%02d%02d%02d,%05.1f,%c",
+             heartbeat.timeStamp / 3600,
+             (heartbeat.timeStamp / 60) % 60,
+             heartbeat.timeStamp % 60,
+             valid ? 'A' : 'V',
+             latDeg,
+             (absLat - latDeg) * 60,
+             ownship.report.latitude < 0 ? 'S' : 'N',
+             lonDeg,
+             (absLon - lonDeg) * 60,
+             ownship.report.longitude < 0 ? 'W' : 'E',
+             ownship.report.groundSpeed,
+             ownship.report.track,
+             ts.tm_mday,
+             ts.tm_mon + 1,
+             ts.tm_year % 100,
+             0.0f, 'E' //if (variation > 0) 'E' else 'W'
+    );
+    sendData();
 }
 
-void sendData() {
-    checksum();
-    struct sockaddr_in sendAddr;
-    sendAddr.sin_addr.s_addr = broadcastAddr;
-    sendAddr.sin_family = AF_INET;
-    sendAddr.sin_port = htons(prefUDPPort.currentValue.intValue);
-    ESP_LOGI(TAG, "FLARM data: %s", nmeabuf);
-    uart_write_bytes(FLARM_UART, nmeabuf, strlen(nmeabuf));
-    int result = sendto(sock, nmeabuf, strlen(nmeabuf), 0, (struct sockaddr *) &sendAddr, sizeof(sendAddr));
-    printf("sendto port = %d, result = %d, errno = %d\n", sendAddr.sin_port, result, errno);
+void pgrmz() {
+    gpsStatus_t status;
+    getStatus(&status);
+    snprintf(nmeabuf, sizeof nmeabuf, "$PGRMZ,%d,F,2", (int) (status.baroAltitude / .3048));
+    sendData();
+}
+
+void pflaa() {
+    traffic_t traffic[MAX_TARGETS_SHOWN];
+    ownship_t ourPosition;
+    getOwnshipPosition(&ourPosition);
+    getTraffic(traffic, MAX_TARGETS_SHOWN);
+    for (int i = 0; i != MAX_TARGETS_SHOWN; i++) {
+        traffic_t *target = traffic + i;
+        if (!target->active)
+            continue;
+
+        //PFLAA,<AlarmLevel>,<RelativeNorth>,<RelativeEast>, <RelativeVertical>,<IDType>,<ID>,<Track>,<TurnRate>,<GroundSpeed>, <ClimbRate>,<AcftType>
+
+        snprintf(nmeabuf, sizeof nmeabuf,
+                 "$PFLAA,%d,%d,%d,%d,1,%06lX,%d,,%d,%d,%X",
+                 0,  // alarm level
+                 (int) trafficNorthing(&ourPosition.report, &target->report),
+                 (int) trafficEasting(&ourPosition.report, &target->report),
+                 (int) (target->report.altitude - ourPosition.report.altitude),
+                 target->report.address,
+                 (int) target->report.track,
+                 (int) target->report.groundSpeed,
+                 (int) target->report.verticalSpeed,
+                 target->report.category
+        );
+        sendData();
+    }
 }
 
 _Noreturn static void flarmTask(__attribute__((unused)) void *param) {
-    uint64_t nextUpdateMs = 0;
     uart_config_t uartConfig = {
             .baud_rate = prefFlarmBaudRate.currentValue.intValue,
             .data_bits = UART_DATA_8_BITS,
@@ -228,15 +222,21 @@ _Noreturn static void flarmTask(__attribute__((unused)) void *param) {
         ESP_LOGE(TAG, "setsockopt() failed with code %d", sock);
         return;
     } */
+    ESP_LOGI(TAG, "Flarm task started");
     for (;;) {
-        int delay = (int) (nextUpdateMs - esp_timer_get_time() / 1000 )/ portTICK_PERIOD_MS;
-        nextUpdateMs = esp_timer_get_time() / 1000  + 1000;
-        if (delay > 0)
-            vTaskDelay(delay);
+        int64_t started = esp_timer_get_time();
+        TaskHandle_t taskHandle = xTaskGetCurrentTaskHandle();
         if (isWifiConnected()) {
             gpgga();
-            sendData();
+            gprmc();
+            pgrmz();
+            pflaa();
         }
+        int delay = (started + 1000000ll - esp_timer_get_time()) / 1000 / portTICK_PERIOD_MS;
+        ESP_LOGI(TAG, "Flarm task delay %d, connected=%d, task=%p, started=%lld", delay, isWifiConnected(),
+                 taskHandle, started);
+        if (delay > 0)
+            vTaskDelay(delay);
     }
 }
 

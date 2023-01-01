@@ -5,7 +5,7 @@
 #ifndef TRAFFIX_DISPLAY_EVENTS_H
 #define TRAFFIX_DISPLAY_EVENTS_H
 
-#include <esp_event_base.h>
+#include "esp_event.h"
 
 const ESP_EVENT_DECLARE_BASE(EVENT_BASE);
 

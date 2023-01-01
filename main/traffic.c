@@ -119,7 +119,7 @@ void showTraffic() {
     uint32_t oldMs = esp_timer_get_time() / 1000 - MAX_TRAFFIC_AGE_MS;
     // move cursor up and clear screen
     //printf("\r\033[%dA\033[J", cnt+2);
-    printf("heap free, = %d smallest  = %d\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
+    printf("heap free, = %lu smallest  = %lu\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize());
     ownship_t ourPosition;
     getOwnshipPosition(&ourPosition);
     printPosition(true, &ourPosition.report, 0.0f, ourPosition.timestampMs);

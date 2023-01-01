@@ -25,7 +25,10 @@ typedef struct {
     float baroAltitude;
     float geoAltitude;
     int satellitesUsed;
-    int NACp;
+    float accuracyH;
+    float accuracyV;
+    uint32_t gpsTime;
+    int batteryPercent;
 } gpsStatus_t;
 
 

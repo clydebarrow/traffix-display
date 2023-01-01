@@ -1,20 +1,19 @@
 //
 // Created by Clyde Stubbs on 24/10/2022.
 //
+#include "wifi_prov.h"
 #include <esp_err.h>
 #include <esp_netif.h>
 #include <esp_event.h>
-#include <freertos/event_groups.h>
+#include <esp_wifi.h>
 #include <wifi_provisioning/manager.h>
 #include <esp_wifi_default.h>
-#include <esp_wifi.h>
 #include <wifi_provisioning/scheme_ble.h>
 #include <esp_log.h>
 #include <string.h>
 #include <lvgl.h>
 #include <lwip/sockets.h>
 #include "ui.h"
-#include "wifi_prov.h"
 #include "events.h"
 #include "status.h"
 
@@ -73,10 +72,9 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
         wifiState = WIFI_CONNECTED;
-        tcpip_adapter_ip_info_t ipInfo;
-        tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ipInfo);
-        broadcastAddr = ipInfo.ip.addr | ~ipInfo.netmask.addr;
-        ESP_LOGI(TAG, "addr = %x, mask=%x, broadcast=%x\n", ipInfo.ip.addr, ipInfo.netmask.addr, broadcastAddr);
+        broadcastAddr = event->ip_info.ip.addr | ~event->ip_info.netmask.addr;
+        ESP_LOGI(TAG, "addr = %lx, mask=%lx, broadcast=%lx\n",
+                 event->ip_info.ip.addr, event->ip_info.netmask.addr, broadcastAddr);
         postMessage(EVENT_WIFI_CHANGE, NULL, 0);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
@@ -151,7 +149,7 @@ void provisionWiFi(bool force) {
          */
         char pop[12];
         uint32_t rand = esp_random();
-        snprintf(pop, sizeof(pop), "TFX%08X", rand);
+        snprintf(pop, sizeof(pop), "TFX%08lX", rand);
 
         uint8_t custom_service_uuid[16] = {
                 /* LSB <---------------------------------------

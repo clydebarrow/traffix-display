@@ -16,7 +16,6 @@ LV_IMG_DECLARE(north)
 LV_IMG_DECLARE(target)
 
 
-#define MAX_TARGETS_SHOWN   4
 
 static const char *const TAG = "main_display";
 static float range = 40000.f;     // display range in meters. This display box will be 2*range wide and high
