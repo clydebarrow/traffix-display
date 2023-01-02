@@ -18,6 +18,8 @@ static const char *TAG = "GDL90";
 static int listenPort = 4000;
 static int listeningSocket;
 static uint8_t rxBuffer[1600];
+static char wsBuffer[3000];
+
 
 static gdl90Status_t gdl90Status;
 //static char gdl90StatusText[256];
@@ -25,7 +27,7 @@ static uint32_t lastTrafficMs;
 static bool websocketOpen;
 static esp_websocket_client_handle_t clientHandle;
 
-static int utcFromGpsTime(char * buf, size_t len, time_t gpsTime) {
+static int utcFromGpsTime(char *buf, size_t len, time_t gpsTime) {
     gpsTime += 315964800 + 18;
     struct tm ts;
     ts = *gmtime(&gpsTime);
@@ -37,19 +39,21 @@ static void rxJson(const char *data, size_t len) {
     cJSON *root = cJSON_ParseWithLength(data, len);
     gpsStatus_t status;
     cJSON *value;
-    cJSON * sub;
+    cJSON *sub;
 
-    if (root == NULL)
+    if (root == NULL) {
+        //ESP_LOGI(TAG, "root parse failed");
         return;
+    }
     memset(&status, 0, sizeof status);
     value = cJSON_GetObjectItem(root, "batteryCapacity_%");
     if (value != NULL)
         status.batteryPercent = value->valueint;
     sub = cJSON_GetObjectItem(root, "host");
     if (value != NULL) {
-        cJSON * gps;
+        cJSON *gps;
         gps = cJSON_GetObjectItem(sub, "gps");
-        if(gps != NULL) {
+        if (gps != NULL) {
             value = cJSON_GetObjectItem(gps, "positionAccuracy_mm");
             if (value != NULL)
                 status.accuracyH = value->valueint / 1000.0f;
@@ -65,6 +69,8 @@ static void rxJson(const char *data, size_t len) {
             value = cJSON_GetObjectItem(gps, "numSats");
             if (value != NULL)
                 status.satellitesUsed = value->valueint;
+            else
+                ESP_LOGI(TAG, "numSats parse failed");
             value = cJSON_GetObjectItem(gps, "UTCTime");
             if (value != NULL)
                 status.gpsTime = value->valueint;
@@ -82,8 +88,7 @@ static void rxJson(const char *data, size_t len) {
     cJSON_Delete(root);
     char buf[80];
     utcFromGpsTime(buf, sizeof buf, status.gpsTime);
-    printf("Satellites: %d, gpsFix: %d, baroAltitude: %f, geoAltitude: %f, Time: %s\n",
-           status.satellitesUsed, status.gpsFix, status.baroAltitude, status.geoAltitude, buf);
+    //printf("Satellites: %d, gpsFix: %d, baroAltitude: %f, geoAltitude: %f, Time: %s\n", status.satellitesUsed, status.gpsFix, status.baroAltitude, status.geoAltitude, buf);
     setStatus(&status);
 }
 
@@ -107,8 +112,12 @@ static void websocketHandler(
 
         case WEBSOCKET_EVENT_DATA:
             if (data->op_code == 1 || data->op_code == 2) {
-                //printf("received %.*s from websocket\n", data->data_len, data->data_ptr);
-                rxJson(data->data_ptr, data->data_len);
+                size_t end = data->payload_offset + data->data_len;
+                if (end > sizeof wsBuffer)
+                    break;
+                memcpy(wsBuffer + data->payload_offset, data->data_ptr, data->data_len);
+                if (end == data->payload_len)
+                    rxJson(wsBuffer, end);
             }
             break;
 
@@ -143,7 +152,7 @@ void processPacket(gdl90Data_t *packet, struct in_addr *srcAddr) {
     switch (packet->id) {
         case GDL90_HEARTBEAT:
             setHeartbeat(&packet->heartbeat);
-            //snprintf(gdl90StatusText, sizeof(gdl90StatusText), "Heartbeat @%d GPSvalid %s", packet->heartbeat.timeStamp, //packet->heartbeat.gpsPosValid ? "true" : "false");
+            //snprintf(gdl90StatusTexta sizeof(gdl90StatusText), "Heartbeat @%d GPSvalid %s", packet->heartbeat.timeStamp, //packet->heartbeat.gpsPosValid ? "true" : "false");
             break;
 
         case GDL90_OWNSHIP_REPORT:
@@ -169,7 +178,7 @@ void processPacket(gdl90Data_t *packet, struct in_addr *srcAddr) {
             break;
 
         default:
-            //printf("Received unhandled packet type %d", packet->id);
+            ESP_LOGI(TAG, "Received unhandled packet type %d", packet->id);
             break;
     }
     //ESP_LOGI(TAG, "%s", gdl90StatusText);

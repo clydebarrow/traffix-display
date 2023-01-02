@@ -51,7 +51,7 @@ static void eventHandler(void *handler_arg, esp_event_base_t base, int32_t event
         case EVENT_GDL90_CHANGE:
             break;
         default:
-            ESP_LOGI(TAG, "Event %ld received", eventId);
+            ESP_LOGI(TAG, "Event %d received", (int)eventId);
             break;
     }
     statusUpdate();

@@ -1,4 +1,4 @@
 dependencies:
-  espressif/esp_websocket_client: ">=0.0.4"
-  idf: ">=5.0"
+  #espressif/esp_websocket_client: ">=0.0.4"
+  idf: ">=4.4"
   lvgl/lvgl: "==8.3.0"

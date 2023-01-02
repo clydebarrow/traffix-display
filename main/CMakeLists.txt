@@ -4,7 +4,7 @@ file(GLOB MAIN_SOURCES *.c)
 
 
 idf_component_register(
-        REQUIRES lvgl gdl90 esp_websocket_client
+        REQUIRES lvgl gdl90
         SRCS ${IMAGE_SOURCES} ${MAIN_SOURCES}
         INCLUDE_DIRS "." )
             #"${IDF_PATH}/components/json/cJSON"

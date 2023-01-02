@@ -106,10 +106,10 @@ void gpgga() {
     int lonDeg = (int) absLon;
 
     snprintf(nmeabuf, sizeof nmeabuf,
-             "$GPGGA,%02lu%02lu%02lu,%02d%05.2f,%c,%02d%05.2f,%c,%d,%02d,%d,%3.1f,M,%3.1f,M,,",
-             heartbeat.timeStamp / 3600,
-             (heartbeat.timeStamp / 60) % 60,
-             heartbeat.timeStamp % 60,
+             "$GPGGA,%02u%02u%02u,%02d%05.2f,%c,%02d%05.2f,%c,%d,%02d,%d,%3.1f,M,%3.1f,M,,",
+             (unsigned int) (heartbeat.timeStamp / 3600),
+             (unsigned int) ((heartbeat.timeStamp / 60) % 60),
+             (unsigned int) (heartbeat.timeStamp % 60),
              latDeg,
              (absLat - latDeg) * 60,
              ownship.report.latitude < 0 ? 'S' : 'N',
@@ -139,10 +139,10 @@ void gprmc() {
     time_t utc = status.gpsTime + (315964800 + 18);
     ts = *gmtime(&utc);
     snprintf(nmeabuf, sizeof nmeabuf,
-             "$GPRMC,%02lu%02lu%02lu,%c,%02d%05.2f,%c,%03d%05.2f,%c,%05.1f,%05.1f,%02d%02d%02d,%05.1f,%c",
-             heartbeat.timeStamp / 3600,
-             (heartbeat.timeStamp / 60) % 60,
-             heartbeat.timeStamp % 60,
+             "$GPRMC,%02u%02u%02u,%c,%02d%05.2f,%c,%03d%05.2f,%c,%05.1f,%05.1f,%02d%02d%02d,%05.1f,%c",
+             (unsigned int) (heartbeat.timeStamp / 3600),
+             (unsigned int) ((heartbeat.timeStamp / 60) % 60),
+             (unsigned int) (heartbeat.timeStamp % 60),
              valid ? 'A' : 'V',
              latDeg,
              (absLat - latDeg) * 60,
@@ -180,12 +180,12 @@ void pflaa() {
         //PFLAA,<AlarmLevel>,<RelativeNorth>,<RelativeEast>, <RelativeVertical>,<IDType>,<ID>,<Track>,<TurnRate>,<GroundSpeed>, <ClimbRate>,<AcftType>
 
         snprintf(nmeabuf, sizeof nmeabuf,
-                 "$PFLAA,%d,%d,%d,%d,1,%06lX,%d,,%d,%d,%X",
+                 "$PFLAA,%d,%d,%d,%d,1,%06X,%d,,%d,%d,%X",
                  0,  // alarm level
                  (int) trafficNorthing(&ourPosition.report, &target->report),
                  (int) trafficEasting(&ourPosition.report, &target->report),
                  (int) (target->report.altitude - ourPosition.report.altitude),
-                 target->report.address,
+                 (unsigned int)target->report.address,
                  (int) target->report.track,
                  (int) target->report.groundSpeed,
                  (int) target->report.verticalSpeed,

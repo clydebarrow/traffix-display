@@ -16,6 +16,7 @@
 #include "ui.h"
 #include "events.h"
 #include "status.h"
+#include "src/extra/libs/qrcode/lv_qrcode.h"
 
 static const char *TAG = "WiFi";
 
@@ -73,8 +74,8 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         /* Signal main application to continue execution */
         wifiState = WIFI_CONNECTED;
         broadcastAddr = event->ip_info.ip.addr | ~event->ip_info.netmask.addr;
-        ESP_LOGI(TAG, "addr = %lx, mask=%lx, broadcast=%lx\n",
-                 event->ip_info.ip.addr, event->ip_info.netmask.addr, broadcastAddr);
+        ESP_LOGI(TAG, "addr = %x, mask=%x, broadcast=%x\n",
+                 (unsigned int)event->ip_info.ip.addr, (unsigned int)event->ip_info.netmask.addr, broadcastAddr);
         postMessage(EVENT_WIFI_CHANGE, NULL, 0);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
@@ -148,8 +149,8 @@ void provisionWiFi(bool force) {
          *      - NULL if not used
          */
         char pop[12];
-        uint32_t rand = esp_random();
-        snprintf(pop, sizeof(pop), "TFX%08lX", rand);
+        unsigned int rand = esp_random();
+        snprintf(pop, sizeof(pop), "TFX%08X", rand);
 
         uint8_t custom_service_uuid[16] = {
                 /* LSB <---------------------------------------
