@@ -202,6 +202,7 @@ _Noreturn static void flarmTask(__attribute__((unused)) void *param) {
             .parity = UART_PARITY_DISABLE,
             .stop_bits = UART_STOP_BITS_1,
             .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+            .source_clk = UART_SCLK_DEFAULT
     };
     ESP_ERROR_CHECK(uart_param_config(FLARM_UART, &uartConfig));
     ESP_ERROR_CHECK(uart_set_pin(FLARM_UART, 17, 18, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
