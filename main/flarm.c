@@ -226,18 +226,14 @@ _Noreturn static void flarmTask(__attribute__((unused)) void *param) {
     ESP_LOGI(TAG, "Flarm task started");
     for (;;) {
         int64_t started = esp_timer_get_time();
-        TaskHandle_t taskHandle = xTaskGetCurrentTaskHandle();
         if (isWifiConnected()) {
             gpgga();
             gprmc();
             pgrmz();
             pflaa();
         }
-        int delay = (started + 1000000ll - esp_timer_get_time()) / 1000 / portTICK_PERIOD_MS;
-        ESP_LOGI(TAG, "Flarm task delay %d, connected=%d, task=%p, started=%lld", delay, isWifiConnected(),
-                 taskHandle, started);
-        if (delay > 0)
-            vTaskDelay(delay);
+        TickType_t delay = (started + 1000000ll - esp_timer_get_time()) / 1000 / portTICK_PERIOD_MS;
+        vTaskDelay(delay);
     }
 }
 

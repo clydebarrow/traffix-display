@@ -92,7 +92,6 @@ static void uiEventHandler(void *handler_arg, esp_event_base_t base, long newSta
     lv_obj_add_event_cb(curTile, tileDeleteCb, LV_EVENT_DELETE, (void *) currentScreen);
     // show the new tile
     lv_scr_load_anim(curTile, LV_SCR_LOAD_ANIM_FADE_IN, 400, 0, true);
-    setBacklightState(true);
 }
 
 void showStats() {

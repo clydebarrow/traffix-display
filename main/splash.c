@@ -4,6 +4,7 @@
 
 #include "ui.h"
 #include "events.h"
+#include "main.h"
 /**
 * Create a splash screen on the given tile
 */
@@ -33,8 +34,14 @@ static void splashCreate(lv_obj_t *tile) {
     lv_timer_set_repeat_count(timer, 1);
 }
 
+static void splashUpdate(lv_obj_t * tile) {
+    setBacklightState(true);
+}
+
 const uiScreen_t uiSplash = {
         .name = "Splash",
         .setup = splashCreate,
+        .update = splashUpdate,
+        .refreshMs = 200,
         .teardown = NULL
 };

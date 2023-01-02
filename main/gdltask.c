@@ -18,14 +18,15 @@ static const char *TAG = "GDL90";
 static int listenPort = 4000;
 static int listeningSocket;
 static uint8_t rxBuffer[1600];
-
+static char wsBuffer[3000];
 static gdl90Status_t gdl90Status;
 //static char gdl90StatusText[256];
 static uint32_t lastTrafficMs;
-static bool websocketOpen;
+static bool websocketOpening;
+static bool websocketConnected;
 static esp_websocket_client_handle_t clientHandle;
 
-static int utcFromGpsTime(char * buf, size_t len, time_t gpsTime) {
+static size_t utcFromGpsTime(char *buf, size_t len, time_t gpsTime) {
     gpsTime += 315964800 + 18;
     struct tm ts;
     ts = *gmtime(&gpsTime);
@@ -37,34 +38,38 @@ static void rxJson(const char *data, size_t len) {
     cJSON *root = cJSON_ParseWithLength(data, len);
     gpsStatus_t status;
     cJSON *value;
-    cJSON * sub;
+    cJSON *sub;
 
-    if (root == NULL)
+    if (root == NULL) {
+        //ESP_LOGI(TAG, "root parse failed");
         return;
+    }
     memset(&status, 0, sizeof status);
     value = cJSON_GetObjectItem(root, "batteryCapacity_%");
     if (value != NULL)
         status.batteryPercent = value->valueint;
     sub = cJSON_GetObjectItem(root, "host");
     if (value != NULL) {
-        cJSON * gps;
+        cJSON *gps;
         gps = cJSON_GetObjectItem(sub, "gps");
-        if(gps != NULL) {
+        if (gps != NULL) {
             value = cJSON_GetObjectItem(gps, "positionAccuracy_mm");
             if (value != NULL)
-                status.accuracyH = value->valueint / 1000.0f;
+                status.accuracyH = (float)value->valueint / 1000.0f;
             value = cJSON_GetObjectItem(gps, "verticalAccuracy_mm");
             if (value != NULL)
-                status.accuracyV = value->valueint / 1000.0f;
+                status.accuracyV = (float)value->valueint / 1000.0f;
             value = cJSON_GetObjectItem(gps, "fixType");
             if (value != NULL)
                 status.gpsFix = value->valueint;
             value = cJSON_GetObjectItem(gps, "gnssAlt");
             if (value != NULL)
-                status.geoAltitude = value->valueint / 1000.0f;
+                status.geoAltitude = (float)value->valueint / 1000.0f;
             value = cJSON_GetObjectItem(gps, "numSats");
             if (value != NULL)
                 status.satellitesUsed = value->valueint;
+            else
+                ESP_LOGI(TAG, "numSats parse failed");
             value = cJSON_GetObjectItem(gps, "UTCTime");
             if (value != NULL)
                 status.gpsTime = value->valueint;
@@ -76,20 +81,19 @@ static void rxJson(const char *data, size_t len) {
         baro = cJSON_GetObjectItem(sub, "baro");
         if (value != NULL) {
             value = cJSON_GetObjectItem(baro, "altitude_m");
-            status.baroAltitude = value->valueint;
+            status.baroAltitude = (float)value->valueint;
         }
     }
     cJSON_Delete(root);
     char buf[80];
     utcFromGpsTime(buf, sizeof buf, status.gpsTime);
-    printf("Satellites: %d, gpsFix: %d, baroAltitude: %f, geoAltitude: %f, Time: %s\n",
-           status.satellitesUsed, status.gpsFix, status.baroAltitude, status.geoAltitude, buf);
+    //printf("Satellites: %d, gpsFix: %d, baroAltitude: %f, geoAltitude: %f, Time: %s\n", status.satellitesUsed, status.gpsFix, status.baroAltitude, status.geoAltitude, buf);
     setStatus(&status);
 }
 
 static void websocketHandler(
-        void *event_handler_arg,
-        esp_event_base_t event_base,
+        __attribute__((unused)) void *event_handler_arg,
+        __attribute__((unused)) esp_event_base_t event_base,
         int32_t event_id,
         void *event_data) {
 
@@ -97,24 +101,36 @@ static void websocketHandler(
     //printf("Websocket event %d\n", event_id);
     switch (event_id) {
         case WEBSOCKET_EVENT_CONNECTED:
-            websocketOpen = true;
+            websocketConnected = true;
+            break;
+        case WEBSOCKET_EVENT_DISCONNECTED:
+            websocketConnected = false;
             break;
 
+        case WEBSOCKET_EVENT_ERROR:
         case WEBSOCKET_EVENT_CLOSED:
-            esp_websocket_client_destroy(clientHandle);
-            clientHandle = NULL;
+            if(clientHandle != NULL) {
+                esp_websocket_client_destroy(clientHandle);
+                clientHandle = NULL;
+            }
+            websocketOpening = false;
+            websocketConnected = false;
             break;
 
         case WEBSOCKET_EVENT_DATA:
             if (data->op_code == 1 || data->op_code == 2) {
-                //printf("received %.*s from websocket\n", data->data_len, data->data_ptr);
-                rxJson(data->data_ptr, data->data_len);
+                size_t end = data->payload_offset + data->data_len;
+                if (end > sizeof wsBuffer)
+                    break;
+                memcpy(wsBuffer + data->payload_offset, data->data_ptr, data->data_len);
+                if (end == data->payload_len)
+                    rxJson(wsBuffer, end);
             }
             break;
 
-        case WEBSOCKET_EVENT_DISCONNECTED:
-            websocketOpen = false;
+        default:
             break;
+
     }
 }
 
@@ -129,7 +145,7 @@ static void openWebsocket(struct in_addr *srcAddr, int port) {
     const esp_websocket_client_config_t ws_cfg = {
             .uri = url
     };
-    websocketOpen = true;
+    websocketOpening = true;
     clientHandle = esp_websocket_client_init(&ws_cfg);
     esp_websocket_register_events(clientHandle, WEBSOCKET_EVENT_ANY, websocketHandler, NULL);
     ESP_ERROR_CHECK(esp_websocket_client_start(clientHandle));
@@ -143,7 +159,7 @@ void processPacket(gdl90Data_t *packet, struct in_addr *srcAddr) {
     switch (packet->id) {
         case GDL90_HEARTBEAT:
             setHeartbeat(&packet->heartbeat);
-            //snprintf(gdl90StatusText, sizeof(gdl90StatusText), "Heartbeat @%d GPSvalid %s", packet->heartbeat.timeStamp, //packet->heartbeat.gpsPosValid ? "true" : "false");
+            //snprintf(gdl90StatusTexta sizeof(gdl90StatusText), "Heartbeat @%d GPSvalid %s", packet->heartbeat.timeStamp, //packet->heartbeat.gpsPosValid ? "true" : "false");
             break;
 
         case GDL90_OWNSHIP_REPORT:
@@ -159,20 +175,18 @@ void processPacket(gdl90Data_t *packet, struct in_addr *srcAddr) {
             break;
 
         case GDL90_FOREFLIGHT_ID:
-            if (!websocketOpen && strncmp(packet->foreflightId.name, "SkyEcho", 7) == 0)
+            if (!websocketOpening && strncmp(packet->foreflightId.name, "SkyEcho", 7) == 0)
                 openWebsocket(srcAddr, 80);
-            else if (!websocketOpen && strncmp(packet->foreflightId.name, "Sim:", 4) == 0) {
+            else if (!websocketOpening && strncmp(packet->foreflightId.name, "Sim:", 4) == 0) {
                 int port = atoi(packet->foreflightId.name + 4);
                 openWebsocket(srcAddr, port);
             }
-            //snprintf(gdl90StatusText, sizeof(gdl90StatusText), "Foreflight %s/%s %s", packet->foreflightId.name, packet->foreflightId.longName, packet->foreflightId.wgs84 ? "WGS84" : "MSL");
             break;
 
         default:
-            //printf("Received unhandled packet type %d", packet->id);
+            ESP_LOGI(TAG, "Received unhandled packet type %d", packet->id);
             break;
     }
-    //ESP_LOGI(TAG, "%s", gdl90StatusText);
     if (gdl90Status != GDL90_STATE_RX) {
         gdl90Status = GDL90_STATE_RX;
         postMessage(EVENT_GDL90_CHANGE, NULL, 0);
@@ -203,10 +217,10 @@ static void gCallback(const gdlDataPacket_t *packet, struct in_addr *srcAddr) {
 
 _Noreturn void gdlTask(void *param) {
     for (;;) {
-        ESP_LOGI(TAG, "UDP task restarts");
         vTaskDelay(2000 / portTICK_PERIOD_MS);      // retry after delay
         if (!isWifiConnected())
             continue;
+        ESP_LOGI(TAG, "GDL UDP Socket opening");
         listeningSocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (listeningSocket <= 0) {
             ESP_LOGI(TAG, "Error: listenForPackets - socket() failed.");
@@ -238,9 +252,6 @@ _Noreturn void gdlTask(void *param) {
 
         for (;;) {
             // close websocket if disconnected
-            if (!websocketOpen && clientHandle != NULL) {
-                esp_websocket_client_close(clientHandle, 1);
-            }
             ssize_t result = recvfrom(listeningSocket, rxBuffer, sizeof(rxBuffer), 0,
                                       (struct sockaddr *) &sourceAddr, &sourceAddrLen);
             if (result > 0) {
@@ -248,10 +259,11 @@ _Noreturn void gdlTask(void *param) {
                 gdl90GetBlocks(rxBuffer, result, gCallback, &sourceAddr.sin_addr);
             } else if (!isWifiConnected()) {
                 closesocket(listeningSocket);
-                if (clientHandle != NULL && !websocketOpen) {
-                    esp_websocket_client_close(clientHandle, 1);
-                    websocketOpen = false;
+                if (clientHandle != NULL) {
+                    esp_websocket_client_destroy(clientHandle);
                     clientHandle = NULL;
+                    websocketOpening = false;
+                    websocketConnected = false;
                 }
                 ESP_LOGI(TAG, "UDP task closed socket");
                 break;
