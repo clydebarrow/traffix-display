@@ -25,6 +25,7 @@ static const char *TAG = "main";
 static lv_disp_draw_buf_t disp_buf; // contains internal graphic buffer(s) called draw buffer(s)
 static lv_disp_drv_t disp_drv;      // contains callback functions
 static esp_lcd_panel_handle_t panel_handle = NULL;
+static bool lcdOn;
 
 /* DEFINITIONS ---------------------------------------------------------------*/
 
@@ -76,6 +77,10 @@ static void initNvs() {
 }
 
 void setBacklightState(bool on) {
+    if(on != lcdOn) {
+        esp_lcd_panel_disp_on_off(panel_handle, on);
+        lcdOn = on;
+    }
     gpio_set_level(TRAFFIX_PIN_NUM_BK_LIGHT,
                    on ? TRAFFIX_LCD_BK_LIGHT_ON_LEVEL : TRAFFIX_LCD_BK_LIGHT_OFF_LEVEL);
 }
@@ -83,7 +88,7 @@ void setBacklightState(bool on) {
 static void initLcd(void) {
     //GPIO configuration
     esp_lcd_panel_io_handle_t io_handle = NULL;
-    ESP_LOGI(TAG, "Turn off LCD backlight");
+    //ESP_LOGI(TAG, "Turn off LCD backlight");
     gpio_config_t bk_gpio_config = {
             .mode = GPIO_MODE_OUTPUT,
             .pin_bit_mask = 1ULL << TRAFFIX_PIN_NUM_BK_LIGHT
@@ -172,7 +177,7 @@ static void initLcd(void) {
     esp_lcd_panel_dev_config_t panel_config =
             {
                     .reset_gpio_num = TRAFFIX_PIN_NUM_RST,
-                    .color_space = ESP_LCD_COLOR_SPACE_RGB,
+                    .rgb_endian = LCD_RGB_ENDIAN_RGB,
                     .bits_per_pixel = 16,
             };
 

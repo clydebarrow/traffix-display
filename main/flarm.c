@@ -202,6 +202,7 @@ _Noreturn static void flarmTask(__attribute__((unused)) void *param) {
             .parity = UART_PARITY_DISABLE,
             .stop_bits = UART_STOP_BITS_1,
             .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+            .source_clk = UART_SCLK_DEFAULT
     };
     ESP_ERROR_CHECK(uart_param_config(FLARM_UART, &uartConfig));
     ESP_ERROR_CHECK(uart_set_pin(FLARM_UART, 17, 18, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
@@ -225,18 +226,14 @@ _Noreturn static void flarmTask(__attribute__((unused)) void *param) {
     ESP_LOGI(TAG, "Flarm task started");
     for (;;) {
         int64_t started = esp_timer_get_time();
-        TaskHandle_t taskHandle = xTaskGetCurrentTaskHandle();
         if (isWifiConnected()) {
             gpgga();
             gprmc();
             pgrmz();
             pflaa();
         }
-        int delay = (started + 1000000ll - esp_timer_get_time()) / 1000 / portTICK_PERIOD_MS;
-        ESP_LOGI(TAG, "Flarm task delay %d, connected=%d, task=%p, started=%lld", delay, isWifiConnected(),
-                 taskHandle, started);
-        if (delay > 0)
-            vTaskDelay(delay);
+        TickType_t delay = (started + 1000000ll - esp_timer_get_time()) / 1000 / portTICK_PERIOD_MS;
+        vTaskDelay(delay);
     }
 }
 
