@@ -23,7 +23,6 @@
 static int sock;
 
 preference_t prefFlarmBaudRate = {
-        // Discard traffic if no data after this many seconds
         "prefFlarmBaud",
         "Transmit baud rate",
         PREF_INT32,
@@ -33,7 +32,7 @@ preference_t prefFlarmBaudRate = {
 };
 
 preference_t prefUDPPort = {
-        // Discard traffic if no data after this many seconds
+        // Broadcast UDP data on this port
         "prefUDPPort",
         "UDP Broadcast port",
         PREF_INT32,

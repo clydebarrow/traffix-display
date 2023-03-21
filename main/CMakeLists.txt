@@ -24,6 +24,7 @@ idf_component_register(
             protocomm
             wifi_provisioning
         SRCS ${IMAGE_SOURCES} ${MAIN_SOURCES}
+)
 
 add_compile_definitions(
         LV_CONF_PATH=${CMAKE_CURRENT_SOURCE_DIR}/lv_conf.h

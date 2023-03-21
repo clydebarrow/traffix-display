@@ -95,7 +95,7 @@ static void initLcd(void) {
     };
     ESP_ERROR_CHECK(gpio_config(&bk_gpio_config));
 
-    gpio_pad_select_gpio(TRAFFIX_PIN_NUM_BK_LIGHT);
+    esp_rom_gpio_pad_select_gpio(TRAFFIX_PIN_NUM_BK_LIGHT);
     setBacklightState(false);
 
 #ifdef  CONFIG_TRAFFIX_TARGET_T_EMBED
@@ -128,8 +128,8 @@ static void initLcd(void) {
     ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io_handle, &panel_config, &panel_handle));
 #endif
 #ifdef CONFIG_TRAFFIX_TARGET_T_DISPLAY_S3
-    gpio_pad_select_gpio(TRAFFIX_PIN_RD);
-    gpio_pad_select_gpio(TRAFFIX_PIN_PWR);
+    esp_rom_gpio_pad_select_gpio(TRAFFIX_PIN_RD);
+    esp_rom_gpio_pad_select_gpio(TRAFFIX_PIN_PWR);
 
     gpio_set_direction(TRAFFIX_PIN_RD, GPIO_MODE_OUTPUT);
     gpio_set_direction(TRAFFIX_PIN_PWR, GPIO_MODE_OUTPUT);

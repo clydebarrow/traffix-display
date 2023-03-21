@@ -13,6 +13,9 @@
 #include "main.h"
 #include "ownship.h"
 
+/**
+ * The currently tracked traffic list.
+ */
 static traffic_t traffic[MAX_TRAFFIC_TRACKED];
 static pthread_mutex_t trafficMutex;        // control access to the traffic array
 
@@ -37,6 +40,13 @@ static void updateTraffic(traffic_t *tp, const gdl90PositionReport_t *report, fl
 }
 
 
+/**
+ * Compare two traffic entries. Active targets compare smaller than inactive, otherwise it is
+ * based on distance.
+ * @param tp1
+ * @param tp2
+ * @return
+ */
 static int compareTraffic(const void *tp1, const void *tp2) {
     if (!((traffic_t *) tp1)->active && !((traffic_t *) tp2)->active)
         return 0;
@@ -48,6 +58,7 @@ static int compareTraffic(const void *tp1, const void *tp2) {
 }
 
 // sort the traffic by nearest first.
+// old traffic will first be marked as inactive.
 
 static void sortTraffic() {
     uint32_t oldMs = esp_timer_get_time() / 1000 - MAX_TRAFFIC_AGE_MS;
@@ -69,10 +80,21 @@ static traffic_t *getEntry() {
     return traffic + ARRAY_SIZE(traffic) - 1;
 }
 
+/**
+ * Set up the traffic system.
+ */
 void initTraffic() {
     pthread_mutex_init(&trafficMutex, NULL);
 }
 
+/**
+ * Receive a traffic report and update the traffic list
+ * An existing target will be updated.
+ * if the target is not currently in the list, it will be added if there is an inactive slot available,
+ * or the new target is closer than the farthest currently active target, in which case that slot will
+ * be evicted and filled with the new target.
+ * @param report
+ */
 void processTraffic(const gdl90PositionReport_t *report) {
     ownship_t ourPosition;
     bool posValid = getOwnshipPosition(&ourPosition);
@@ -103,9 +125,10 @@ void processTraffic(const gdl90PositionReport_t *report) {
 }
 
 /**
- * Get the closest cnt traffic targets and return copies of them in the buffer
- * @param buffer
- * @param cnt
+ * Get the closest cnt traffic targets and return copies of them in the buffer. The number of targets
+ * returned will always be equal to cnt, but not all may be active.
+ * @param buffer receives the data
+ * @param cnt Number of targets to return.
  */
 
 void getTraffic(traffic_t *buffer, size_t cnt) {
@@ -115,12 +138,13 @@ void getTraffic(traffic_t *buffer, size_t cnt) {
     pthread_mutex_unlock(&trafficMutex);
 }
 
+/**
+ * Print a representation of the current traffic list.
+ */
 void showTraffic() {
     uint32_t oldMs = esp_timer_get_time() / 1000 - MAX_TRAFFIC_AGE_MS;
     // move cursor up and clear screen
     //printf("\r\033[%dA\033[J", cnt+2);
-    printf("heap free, = %lu smallest  = %lu\n",
-           (unsigned long)xPortGetFreeHeapSize(), (unsigned long)xPortGetMinimumEverFreeHeapSize());
     ownship_t ourPosition;
     getOwnshipPosition(&ourPosition);
     printPosition(true, &ourPosition.report, 0.0f, ourPosition.timestampMs);

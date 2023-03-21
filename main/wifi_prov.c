@@ -75,7 +75,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         wifiState = WIFI_CONNECTED;
         broadcastAddr = event->ip_info.ip.addr | ~event->ip_info.netmask.addr;
         ESP_LOGI(TAG, "addr = %x, mask=%x, broadcast=%x\n",
-                 (unsigned int)event->ip_info.ip.addr, (unsigned int)event->ip_info.netmask.addr, broadcastAddr);
+                 (unsigned int)event->ip_info.ip.addr, (unsigned int)event->ip_info.netmask.addr, (unsigned int)broadcastAddr);
         postMessage(EVENT_WIFI_CHANGE, NULL, 0);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
