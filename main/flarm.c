@@ -9,6 +9,8 @@
 #include <math.h>
 #include <lwip/sockets.h>
 #include <esp_log.h>
+#include <driver/gpio.h>
+#include <rom/ets_sys.h>
 
 #include "gdltask.h"
 #include "flarm.h"
@@ -194,7 +196,33 @@ void pflaa() {
     }
 }
 
+#define LED_GPIO 1
+
+static void callback(void* arg) {
+    //gpio_set_direction(LED_GPIO, GPIO_MODE_INPUT);
+    ESP_LOGI(TAG, "Discharging led");
+    gpio_set_level(LED_GPIO, 0);
+}
+static esp_timer_handle_t setHightimer;
+
+
+static void setupLed() {
+    gpio_set_level(LED_GPIO, 1);
+    gpio_set_direction(LED_GPIO, GPIO_MODE_INPUT);
+    const esp_timer_create_args_t highTimerArgs = {
+            .callback = &callback,
+            .name = "setHigh"
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&highTimerArgs, &setHightimer));
+}
+static void chargeLed() {
+    ESP_LOGI(TAG, "Charging led");
+    gpio_set_direction(LED_GPIO, GPIO_MODE_OUTPUT);
+    gpio_set_level(LED_GPIO, 1);
+    esp_timer_start_once(setHightimer, 4000);
+}
 _Noreturn static void flarmTask(__attribute__((unused)) void *param) {
+    setupLed();
     uart_config_t uartConfig = {
             .baud_rate = prefFlarmBaudRate.currentValue.intValue,
             .data_bits = UART_DATA_8_BITS,
@@ -232,6 +260,7 @@ _Noreturn static void flarmTask(__attribute__((unused)) void *param) {
             pflaa();
         }
         TickType_t delay = (started + 1000000ll - esp_timer_get_time()) / 1000 / portTICK_PERIOD_MS;
+        chargeLed();
         vTaskDelay(delay);
     }
 }

@@ -3,5 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../../../tools/esp/esp-idf-4.4" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/../../../tools/esp/esp-idf-5.0.2" vcs="Git" />
   </component>
 </project>
